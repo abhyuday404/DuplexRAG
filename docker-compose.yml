@@ -1,0 +1,24 @@
+# One command:  docker compose up --build
+#   * duplexrag : real-time web demo on http://localhost:8000
+#   * replay    : automated streaming replay of the held-out benchmark (DuplexRAG + baseline + ablations);
+#                 writes results/test/{summary.md,summary.json,<config>/trace.jsonl ...} and exits 0
+services:
+  duplexrag:
+    build: .
+    image: duplexrag:1.0
+    ports:
+      - "8000:8000"
+    environment:
+      - DUPLEXRAG_THREADS=4
+    restart: unless-stopped
+
+  replay:
+    build: .
+    image: duplexrag:1.0
+    command: ["uv", "run", "--no-sync", "python", "-m", "duplexrag", "bench", "--split", "test", "--ablations",
+              "--out", "/app/results"]
+    volumes:
+      - ./results:/app/results
+    environment:
+      - DUPLEXRAG_THREADS=4
+    restart: "no"

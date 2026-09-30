@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DuplexRAG turn output record (results/*/turns.jsonl, CLI replay)",
+  "type": "object",
+  "required": ["session_id", "turn_id", "kind", "text", "version", "citations", "sub_queries", "uncertainty",
+               "grounding", "latency", "cost", "retrieved", "early"],
+  "properties": {
+    "session_id": {"type": "string"},
+    "turn_id": {"type": "string"},
+    "t_start": {"type": "number"}, "t_end": {"type": "number"},
+    "chunks": {"type": "array", "items": {"type": "array", "prefixItems": [{"type": "number"}, {"type": "string"}]}},
+    "kind": {"enum": ["retrieval", "refinement", "presentation", "chitchat"]},
+    "text": {"type": "string", "description": "answer; every claim ends with [Doc_ID §N] citations"},
+    "version": {"type": "integer"},
+    "citations": {"type": "array", "items": {"type": "string"}},
+    "intents": {"type": "array", "items": {"type": "object",
+      "properties": {"iid": {"type": "string"}, "label": {"type": "string"}, "query": {"type": "object"},
+                     "evidence": {"type": "array"}, "version": {"type": "integer"}, "status": {"type": "string"},
+                     "uncertain": {"type": ["string", "null"]}}}},
+    "sub_queries": {"type": "array", "items": {"type": "object",
+      "required": ["qid", "text", "trigger"],
+      "properties": {"qid": {"type": "string"}, "text": {"type": "string"}, "keywords": {"type": "string"},
+                     "trigger": {"enum": ["provisional", "multi_intent", "refinement", "final"]},
+                     "origin": {"type": "string"}, "alt": {"type": "string"}}}},
+    "uncertainty": {"type": "array", "items": {"type": "object", "required": ["message"]}},
+    "grounding": {"type": "object"},
+    "latency": {"type": "object"},
+    "cost": {"type": "object"},
+    "retrieved": {"type": "boolean"},
+    "early": {"type": "boolean"},
+    "diff": {"type": ["object", "null"]}
+  }
+}

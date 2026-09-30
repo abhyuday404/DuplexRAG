@@ -1,0 +1,11 @@
+.git
+.venv
+.claude
+models
+index
+runs
+results
+submission
+**/__pycache__
+*.pyc
+.pytest_cache

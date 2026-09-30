@@ -38,7 +38,7 @@ _TENS = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "sev
 _NUM_WORD = r"(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|" \
             r"sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|" \
             r"thousand|lakh|lakhs)"
-_NUM_SEQ_RE = re.compile(rf"\b(?:a\s+)?{_NUM_WORD}(?:(?:\s+|-)(?:and\s+)?{_NUM_WORD})*\b", re.I)
+_NUM_SEQ_RE = re.compile(rf"\b(?:a\s+(?=hundred|thousand|lakh))?{_NUM_WORD}(?:(?:\s+|-)(?:and\s+)?{_NUM_WORD})*\b", re.I)
 
 REPAIR_MARKERS = r"(?:(?:no sorry|no wait|no no|sorry|no|or rather|scratch that|i mean|i meant)(?:\s*,?\s*(?:i mean|i meant))?)"
 _REPAIR_RE = re.compile(rf"(^|[,.;?!])([^,.;?!]*?)\s*,\s*{REPAIR_MARKERS}\s*,?\s+", re.I)
