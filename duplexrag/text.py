@@ -31,7 +31,15 @@ DANGLING = frozenset(
 a an the and or but of in on at to for with about from by into onto over under between my our your their his
 her its this that these those some any need want like know tell get find check what which who whose how when
 where is are was were be been do does did can could would should will shall i we you they he she it also plus
-as than if whether because so then while about regarding around per via including especially
+as than if whether because so then while about regarding around per via including especially without within
+before after until till across through during against among toward towards upon near take
+""".split()
+)
+
+# a comma after one of these is a pause inside a phrase ("the rule for, a normal trip"), not a clause boundary
+COMMA_JOIN = DANGLING - frozenset("that this these those it need want know tell get find check".split()) | frozenset(
+    """
+am i
 """.split()
 )
 
@@ -48,17 +56,28 @@ def stem(tok: str) -> str:
     """Tiny suffix stripper (a pragmatic subset of Porter step 1)."""
     if tok.isdigit() or len(tok) <= 3:
         return tok
+    base = tok
     for suf, rep in (("ies", "y"), ("sses", "ss"), ("ing", ""), ("ed", ""), ("es", ""), ("s", "")):
         if tok.endswith(suf) and len(tok) - len(suf) >= 3:
+            if suf == "es" and not re.search(r"(s|x|z|ch|sh)es$", tok):
+                continue                                  # "images" -> "image", but "taxes" -> "tax"
+            if suf == "s" and tok.endswith(("ss", "us", "is")):
+                continue
             base = tok[: -len(suf)] + rep
             if suf in ("ing", "ed") and len(base) > 3 and base[-1] == base[-2] and base[-1] not in "lsz":
                 base = base[:-1]
-            return base
-    return tok
+            break
+    if len(base) > 4 and base.endswith("e"):
+        base = base[:-1]                                  # "charge"/"charged" -> "charg"
+    return base
+
+
+_CONTRACTION_RE = re.compile(r"(?<=[a-z])['\u2019](s|re|ll|d|ve|m)\b")
 
 
 def raw_tokens(text: str) -> list[str]:
-    text = text.lower().replace("§", " section ")
+    text = text.lower().replace("§", " section ").replace("n't", " not").replace("n\u2019t", " not")
+    text = _CONTRACTION_RE.sub("", text)
     toks = []
     for t in _TOKEN_RE.findall(text):
         # "2,00,000" / "1,000" -> "200000" / "1000" so numbers match however they are written
@@ -87,6 +106,9 @@ def split_sentences(text: str) -> list[str]:
     units: list[str] = []
     for block in re.split(r"\n\s*\n", text):
         lines = [ln.strip() for ln in block.strip().splitlines() if ln.strip()]
+        # drop markdown table header rows (the row right above a |---| separator)
+        lines = [ln for k, ln in enumerate(lines)
+                 if not (ln.startswith("|") and k + 1 < len(lines) and re.fullmatch(r"\|?[\s:|-]+\|?", lines[k + 1]))]
         para: list[str] = []
         for ln in lines:
             if re.match(r"^([-*+]|\d+[.)])\s+", ln):
