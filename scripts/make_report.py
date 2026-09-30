@@ -189,6 +189,9 @@ answer with the same extractive composer.
 
 ## All splits
 
+(The dev, dev-b and dev-c runs overlapped with the demo-video recording on the same laptop, so their latency columns
+are pessimistic; quality metrics are unaffected.)
+
 {all_splits_table()}
 
 """

@@ -98,6 +98,9 @@ answer with the same extractive composer.
 
 ## All splits
 
+(The dev, dev-b and dev-c runs overlapped with the demo-video recording on the same laptop, so their latency columns
+are pessimistic; quality metrics are unaffected.)
+
 | Split / engine | Turn type | G2 | False trig. | G3 | Hit@3 | Key facts | G4 | False 'not found' | G5 | TTFT p50 |
 |---|---|---|---|---|---|---|---|---|---|---|
 | dev, engine v2 | 97.7 | 100.0 | 0.0 | 80.0 | 96.4 | 77.8 | 100.0 | 0.0 | 88.9 | 5.9 |
