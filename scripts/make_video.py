@@ -1,9 +1,12 @@
-"""Record the demo video: real replays in the live UI + deck slides + offline TTS narration + captions.
+"""Build the demo video: motion-graphics scenes + guided-tour recordings of real replays in the live UI.
 
-    python scripts/make_video.py --piper PATH/TO/piper --voice PATH/TO/en_US-lessac-medium.onnx
+    python scripts/make_video.py
 
-Needs: ffmpeg (with libass), Playwright (`uv sync --extra demo`, uses /usr/bin/chromium if present), the
-deck PDF (scripts/make_deck.py) and a Piper voice. Output: submission/DuplexRAG_demo.mp4 (+ .srt).
+No narration: an animated storyboard (scripts/video/storyboard.html) explains the problem, the pipeline, the
+streaming effect and the results; the product walkthrough is the real web demo replaying scenarios in real time with
+a spotlight tour (scripts/video/tour.js) that reacts to what the app is actually doing.
+Needs ffmpeg and Playwright (`uv sync --extra demo`; uses /usr/bin/chromium if present).
+Output: submission/DuplexRAG_demo.mp4
 """
 from __future__ import annotations
 
@@ -11,7 +14,6 @@ import argparse
 import asyncio
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -20,89 +22,207 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 BUILD = ROOT / "submission" / "_build" / "video"
-TEAM = json.loads((ROOT / "submission" / "team.json").read_text())
-DECK_PDF = ROOT / "submission" / f"{TEAM['college']}_{TEAM['team_name']}_Submission.pdf"
+VIDEO = ROOT / "scripts" / "video"
 PORT = 8766
 W, H = 1920, 1080
 
+# ------------------------------------------------------------------ tour steps (conditions are evaluated in the page)
+TURNS = "document.querySelectorAll('#transcript .turn')"
+TOURS = {
+    "demo-workshop": ("Walkthrough 1 · guide example: compound request, late detail, format request", [
+        {"wait": "document.querySelector('#transcript .chunk')", "target": "document.querySelector('#panel-convo')",
+         "title": "Speech arrives in chunks", "min": 3500,
+         "text": "The request streams in as ASR partials, 2-4 words at a time. On every chunk the controller decides: "
+                 "WAIT, RETRIEVE or SUPPRESS."},
+        {"wait": "document.querySelector('#transcript .chunk.fired')",
+         "target": "document.querySelector('#transcript .chunk.fired')", "title": "Retrieval fires mid-sentence",
+         "min": 3500, "text": "As soon as “customer workshop in Pune” is a stable intent, a provisional search "
+                              "starts - seconds before the user stops talking."},
+        {"wait": "document.querySelectorAll('#queries .q').length >= 3", "target": "document.querySelector('#queries')",
+         "title": "One request, several searches", "min": 3500,
+         "text": "The utterance is decomposed into venue capacity, cancellation terms and catering options; each is "
+                 "searched while the user keeps talking."},
+        {"wait": "document.querySelector('#transcript .chunk.end')", "target": "document.querySelector('.kpis')",
+         "title": "The answer starts in milliseconds", "min": 3200,
+         "text": "At end of speech the speculative results are reused, so the first token needs no new search. "
+                 "Latency, head start and cost are measured per turn."},
+        {"wait": "document.querySelector('#answer .unc')", "target": "document.querySelector('#answer')",
+         "title": "Every claim is cited", "min": 3800,
+         "text": "One line per hidden question. Each claim is a corpus sentence carrying its section ID and is "
+                 "verified against it - no invented citations."},
+        {"wait": "document.querySelector('#answer .unc')", "target": "document.querySelector('#answer .unc')",
+         "title": "Gaps are said out loud", "min": 3800,
+         "text": "The corpus has no catering information for Hinjewadi Tech Park, so DuplexRAG flags it instead of "
+                 "guessing."},
+        {"wait": f"{TURNS}.length >= 2", "target": f"{TURNS}[1]", "title": "A late detail arrives", "min": 3200,
+         "text": "“Actually it's going to be fifty people, not thirty.” - a refinement of the current answer, "
+                 "not a new question."},
+        {"wait": "(document.querySelector('#answer-badges .badge.v') || {}).textContent === 'v2'",
+         "target": "document.querySelector('#diffbar')", "title": "Refined in place: v1 → v2", "min": 3800,
+         "text": "Only the capacity claim is searched again; the other claims are retained. The diff "
+                 "(added / retained / retired) is logged."},
+        {"wait": f"{TURNS}.length >= 3 && document.querySelector('#answer ul')",
+         "target": "document.querySelector('#answer')", "title": "“Repeat that in two bullets”", "min": 3500,
+         "text": "A presentation-only turn: no retrieval at all - the same answer and citations, reformatted."},
+        {"wait": "document.querySelector('#source') && !document.querySelector('#source').hidden",
+         "target": "document.querySelector('#source')", "title": "Citations are traceable", "min": 3500,
+         "text": "Clicking a citation opens the exact corpus section behind the claim."},
+    ]),
+    "demo-reimbursement": ("Walkthrough 2 · guide example: refine, don't restart", [
+        {"wait": f"{TURNS}.length >= 1 && document.querySelector('#transcript .chunk.end') && "
+                 "document.querySelector('#answer .cite')",
+         "target": "document.querySelector('#answer')", "title": "A cited summary", "min": 3200,
+         "text": "“Summarize the travel reimbursement rule for an employee trip” - answered from the "
+                 "reimbursement policy with section citations."},
+        {"wait": f"{TURNS}.length >= 2", "target": f"{TURNS}[1]", "title": "Two facts arrive late", "min": 3200,
+         "text": "“The trip was international, and the booking was made after travel.” Statements about the "
+                 "same topic → refinement."},
+        {"wait": "(document.querySelector('#answer-badges .badge.v') || {}).textContent === 'v2' && "
+                 "document.querySelector('#answer .update')",
+         "target": "document.querySelector('#answer')", "title": "The rule still applies - plus two updates",
+         "min": 4200, "text": "Earlier claims are retained; delta searches add the foreign-currency receipt check and "
+                              "the senior-director approval for post-travel bookings."},
+        {"wait": f"{TURNS}.length >= 3 && document.querySelectorAll('.turn-kind')[2].textContent === 'chitchat'",
+         "target": f"{TURNS}[2]", "title": "“Okay perfect, thanks”", "min": 3000,
+         "text": "Recognised as small talk - nothing is searched and the answer stays in session memory."},
+        {"wait": "true", "target": "document.querySelector('#events')", "title": "Everything is traced", "min": 3200,
+         "text": "Every chunk, decision, search, answer version and its cost is emitted as telemetry and can be "
+                 "downloaded as JSON Lines."},
+    ]),
+    "demo-bengaluru-launch": ("Walkthrough 3 · the key entity arrives last (replayed at 1.5x)", [
+        {"wait": "document.querySelector('#transcript .chunk')", "target": "document.querySelector('#panel-convo')",
+         "title": "The city is mentioned last", "min": 3000,
+         "text": "“...and any safety stuff we need, oh and it's in Bengaluru.” Searches start before the "
+                 "city is known."},
+        {"wait": "[...document.querySelectorAll('#queries .q')].some(q => q.textContent.includes('Bengaluru'))",
+         "target": "document.querySelector('#queries')", "title": "Late entity → speculation invalidated",
+         "min": 3500, "text": "Speculative searches that did not know the city are not reused; they run again with "
+                              "Bengaluru in the query."},
+        {"wait": "document.querySelector('#transcript .chunk.end') && document.querySelector('#answer .cite')",
+         "target": "document.querySelector('#answer')", "title": "Venues, catering and safety for 110 people",
+         "min": 3500, "text": "Each hidden question is answered from Bengaluru-specific and event-policy sections."},
+        {"wait": f"{TURNS}.length >= 2", "target": f"{TURNS}[1]", "title": "“What if we cancel ten days before?”",
+         "min": 3000, "text": "A hypothetical about the same plan → refinement with a single delta search."},
+        {"wait": f"{TURNS}.length >= 3 && document.querySelectorAll('.turn-kind')[2].textContent === 'presentation'",
+         "target": "document.querySelector('#answer')", "title": "“Just give me the gist”", "min": 3200,
+         "text": "Condensed from the current answer version - no retrieval."},
+    ]),
+}
+DEMOS = [("demo-workshop", "1"), ("demo-reimbursement", "1"), ("demo-bengaluru-launch", "1.5")]
 
-def res(key: str, cfg: str = "duplexrag", split: str = "test"):
-    p = ROOT / "results" / split / "summary.json"
-    if not p.exists():
-        return None
-    return json.loads(p.read_text()).get(cfg, {}).get(key)
 
-
-def pct(key: str) -> str:
-    v = res(key)
-    return f"{v:.0f} percent" if v is not None else "most"
-
-
-SEGMENTS = [
-    {"kind": "slide", "page": 1, "text":
-        "Hi, we are team Pokermons from V I T V. This is DuplexRAG, our submission for theme four of the Samsung "
-        "PRISM Generative AI Hackathon: streaming live RAG."},
-    {"kind": "slide", "page": 2, "text":
-        "In a voice conversation people say one natural request, not a tidy query. One sentence can hide several "
-        "questions, the key detail may arrive last, and users add details after they hear the answer. Waiting for "
-        "the end of speech before searching leaves dead air, and restarting on every correction loses context."},
-    {"kind": "slide", "page": 4, "text":
-        "DuplexRAG is event driven. Every transcript chunk goes to a retrieval controller that decides whether to "
-        "wait, retrieve, or suppress. A decomposer splits the utterance into the searches it implies and carries "
-        "shared context into each. BM25 and dense retrieval are fused and reranked by a small cross encoder, on the "
-        "CPU, while the user is still speaking. The session aware composer answers every intent with cited corpus "
-        "sentences, verifies every claim, and flags what the corpus cannot support."},
-    {"kind": "demo", "scenario": "demo-workshop", "screenshot": True, "text":
-        "Here is the example from the theme guide, replayed in real time. The controller waits on the first words, "
-        "fires a provisional search once Pune and thirty people are stable, and dispatches the cancellation and "
-        "catering searches mid sentence. When the user stops, the answer streams almost at once: one line per "
-        "hidden question, and a citation on every claim. Note the flag: catering for the Hinjewadi venue could not "
-        "be verified from the corpus. Now a late detail: fifty people, not thirty. The answer becomes version two; "
-        "only the capacity claim is searched again and the rest is kept. Finally, repeat that in two bullets: no "
-        "retrieval at all, same citations, new format."},
-    {"kind": "demo", "scenario": "demo-reimbursement", "text":
-        "The second guide example. A travel reimbursement question gets a cited summary. Then the user adds that the "
-        "trip was international and the booking was made after travel. DuplexRAG does not restart. It keeps the "
-        "standard rule and adds the foreign currency receipt check and the senior director approval for post travel "
-        "bookings. The thank you is recognised as small talk, so nothing is searched."},
-    {"kind": "demo", "scenario": "demo-bengaluru-launch", "speed": "1.5", "text":
-        "Here the key entity arrives last: oh, and it's in Bengaluru. Speculative searches that did not know the city "
-        "are invalidated and run again, so the answer covers Bengaluru venues, catering and event safety for a "
-        "hundred and ten people. A what if about cancelling ten days before refines the answer, and give me the gist "
-        "condenses it without searching."},
-    {"kind": "slide", "page": 8, "text":
-        f"We measured everything with a discrete event replay on a held out set written independently after the "
-        f"engine was frozen. Retrieval started before the end of speech in {pct('G2_early_retrieval_pct')} of "
-        f"eligible turns. Compound requests were decomposed correctly in {pct('G3_multi_intent_pct')}. "
-        f"{pct('G4_claim_support_pct').capitalize()} of claims were supported by their citation, with zero "
-        f"fabricated document IDs, and {pct('G5_refinement_pass_pct')} of refinements were versioned and delta "
-        f"only. The turn based baseline never retrieves early and cannot refine."},
-    {"kind": "slide", "page": 10, "text":
-        "DuplexRAG runs on a laptop CPU with two small open models, costs about a hundredth of a cent per turn, and "
-        "ships with Docker, a replay benchmark, telemetry, and a live microphone demo. Thank you."},
-]
-
-
-def run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, check=True, capture_output=True, text=True, **kw)
+def run(cmd: list[str]) -> str:
+    return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
 
 
 def duration(path: Path) -> float:
-    out = run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)]).stdout
-    return float(out.strip())
+    return float(run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)]))
 
 
-def tts(piper: str, voice: str, text: str, out: Path) -> float:
-    subprocess.run([piper, "-m", voice, "-f", str(out), "--length-scale", "1.02", "--sentence-silence", "0.25"],
-                   input=text, text=True, check=True, capture_output=True)
-    return duration(out)
+def storyboard_data() -> dict:
+    s = json.loads((ROOT / "results" / "test" / "summary.json").read_text())
+    d, b, ns = s["duplexrag"], s["baseline"], s.get("no_speculation", {})
+    data = {
+        "ttft_on": d["ttft_ms_p50"] / 1000, "ttft_off": ns.get("ttft_ms_p50", 614) / 1000,
+        "bars": [["Retrieval starts before end of speech (G2)", round(d["G2_early_retrieval_pct"]), round(b["G2_early_retrieval_pct"])],
+                 ["Compound requests decomposed (G3)", round(d["G3_multi_intent_pct"]), round(b["G3_multi_intent_pct"])],
+                 ["Gold section in the top-3 evidence", round(d["retrieval_hit_at_3_pct"]), round(b["retrieval_hit_at_3_pct"])],
+                 ["Refinements handled in place (G5)", round(d["G5_refinement_pass_pct"]), round(b["G5_refinement_pass_pct"])],
+                 ["Key facts present in the answer", round(d["key_fact_recall_pct"]), round(b["key_fact_recall_pct"])]],
+        "gates": [["G2 early retrieval", f"{d['G2_early_retrieval_pct']:.0f}%", "target ≥ 80% of eligible turns"],
+                  ["G3 multi-intent", f"{d['G3_multi_intent_pct']:.0f}%", "target ≥ 70% of compound turns"],
+                  ["G4 grounding", f"{d['G4_claim_support_pct']:.0f}% · {d['G4_fabricated_ids']} fabricated IDs",
+                   "target ≥ 85% supported claims"],
+                  ["G5 session refinement", f"{d['G5_refinement_pass_pct']:.0f}%", "versioned, state kept, delta-only"],
+                  ["G6 telemetry", f"{d['G6_trace_coverage_pct']:.0f}%", "trace coverage"],
+                  ["G1 reproducibility", "one command", "Docker Compose + clean-checkout smoke test"]],
+        "kpis": [[f"{d['ttft_ms_p50']:.0f} ms", "median time to first token"],
+                 [f"{ns.get('ttft_ms_p50', 0):.0f} ms", "same stack, no speculation"],
+                 [f"${d['cost_usd_per_turn_mean']:.5f}", "compute per turn (CPU)"],
+                 ["0", "fabricated citations"]],
+    }
+    # real retrieval timing of the guide example (turn 1 of the workshop demo)
+    from duplexrag.engine import DuplexEngine
+    from duplexrag.stream import replay_session
+    sc = [json.loads(l) for l in open(ROOT / "data" / "demo" / "scenarios.jsonl")]
+    sess = next(x for x in sc if x["session_id"] == "demo-workshop")
+    recs, evs = replay_session(DuplexEngine(log=lambda *a: None), {"session_id": "sb", "turns": sess["turns"][:1]})
+    t0 = recs[0]["t_start"]
+    data["speech_s"] = recs[0]["t_end"] - t0
+    trig = {"provisional": "s", "multi_intent": "m", "final": "f"}
+    data["duplex_blocks"] = [[e["t_dispatch"] - t0, max(e["t_stream"] - e["t_dispatch"], 0.15), trig.get(e["trigger"], "m")]
+                             for e in evs if e["event"] == "retrieval_completed"]
+    return data
+
+
+async def record_scene(p, scene: str, data: dict, hold: float, out: Path) -> Path:
+    exe = "/usr/bin/chromium" if Path("/usr/bin/chromium").exists() else None
+    b = await p.chromium.launch(executable_path=exe, args=["--no-sandbox"])
+    ctx = await b.new_context(viewport={"width": W, "height": H}, record_video_dir=str(out),
+                              record_video_size={"width": W, "height": H})
+    page = await ctx.new_page()
+    await page.goto((VIDEO / "storyboard.html").as_uri())
+    await page.wait_for_timeout(300)
+    await page.evaluate("([s, d]) => { window.start(s, d); }", [scene, data])
+    for _ in range(600):
+        if await page.evaluate("window.__sceneDone === true"):
+            break
+        await page.wait_for_timeout(100)
+    await page.wait_for_timeout(int(hold * 1000))
+    video = page.video
+    await ctx.close()
+    await b.close()
+    return Path(await video.path())
+
+
+async def record_demo(p, scenario: str, speed: str, out: Path, screenshot: Path | None) -> Path:
+    banner, steps = TOURS[scenario]
+    exe = "/usr/bin/chromium" if Path("/usr/bin/chromium").exists() else None
+    b = await p.chromium.launch(executable_path=exe, args=["--no-sandbox"])
+    ctx = await b.new_context(viewport={"width": 1600, "height": 900}, record_video_dir=str(out),
+                              record_video_size={"width": 1600, "height": 900})
+    page = await ctx.new_page()
+    await page.goto(f"http://127.0.0.1:{PORT}/")
+    await page.wait_for_timeout(1500)
+    await page.add_script_tag(path=str(VIDEO / "tour.js"))
+    await page.select_option("#scenario", scenario)
+    await page.select_option("#speed", speed)
+    await page.evaluate("([s, b]) => { window.runTour(s, b); }", [steps, banner])
+    await page.wait_for_timeout(600)
+    await page.click("#btn-play")
+    shot_done = screenshot is None
+    for _ in range(1200):
+        await page.wait_for_timeout(250)
+        if not shot_done and await page.evaluate(f"{TURNS}.length") >= 2:
+            await page.evaluate("() => { for (const id of ['tour-spot','tour-card','tour-banner']) { "
+                                "const e = document.getElementById(id); if (e) e.style.visibility = 'hidden'; } }")
+            await page.screenshot(path=str(screenshot))
+            await page.evaluate("() => { for (const id of ['tour-spot','tour-card','tour-banner']) { "
+                                "const e = document.getElementById(id); if (e) e.style.visibility = ''; } }")
+            shot_done = True
+        if await page.evaluate("window.__replayDone === true"):
+            break
+    await page.wait_for_timeout(1500)
+    cite = await page.query_selector("#answer .cite")
+    if cite and scenario == "demo-workshop":
+        await cite.click()
+    for _ in range(200):
+        if await page.evaluate("window.__tourDone === true"):
+            break
+        await page.wait_for_timeout(250)
+    await page.wait_for_timeout(800)
+    video = page.video
+    await ctx.close()
+    await b.close()
+    return Path(await video.path())
 
 
 def start_server() -> subprocess.Popen:
-    env = {**os.environ, "PYTHONUNBUFFERED": "1"}
-    proc = subprocess.Popen([sys.executable, "-m", "duplexrag", "serve", "--port", str(PORT)], cwd=ROOT, env=env,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    proc = subprocess.Popen([sys.executable, "-m", "duplexrag", "serve", "--port", str(PORT)], cwd=ROOT,
+                            env={**os.environ, "PYTHONUNBUFFERED": "1"}, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL)
     for _ in range(120):
         try:
             urllib.request.urlopen(f"http://127.0.0.1:{PORT}/api/health", timeout=2)
@@ -113,107 +233,57 @@ def start_server() -> subprocess.Popen:
     raise SystemExit("server did not start")
 
 
-async def record(scenario: str, out_dir: Path, screenshot: Path | None, speed: str = "1") -> Path:
+def encode(src: Path, dst: Path, trim: float) -> None:
+    d = duration(src) - trim
+    run(["ffmpeg", "-y", "-ss", f"{trim:.2f}", "-i", str(src), "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
+         "-filter_complex",
+         f"[0:v]scale={W}:{H}:force_original_aspect_ratio=decrease,pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:color=0x0b0f16,"
+         f"fps=30,format=yuv420p,fade=t=in:st=0:d=0.4,fade=t=out:st={max(d - 0.45, 0):.2f}:d=0.45[v]",
+         "-map", "[v]", "-map", "1:a", "-t", f"{d:.2f}", "-c:v", "libx264", "-preset", "medium", "-crf", "23",
+         "-c:a", "aac", "-b:a", "64k", "-shortest", str(dst)])
+
+
+async def build(out_path: Path) -> None:
     from playwright.async_api import async_playwright
-    async with async_playwright() as p:
-        exe = "/usr/bin/chromium" if Path("/usr/bin/chromium").exists() else None
-        b = await p.chromium.launch(executable_path=exe, args=["--no-sandbox"])
-        ctx = await b.new_context(viewport={"width": 1600, "height": 900}, device_scale_factor=1,
-                                  record_video_dir=str(out_dir), record_video_size={"width": 1600, "height": 900})
-        page = await ctx.new_page()
-        await page.goto(f"http://127.0.0.1:{PORT}/")
-        await page.wait_for_timeout(1500)
-        await page.select_option("#scenario", scenario)
-        await page.select_option("#speed", speed)
-        await page.wait_for_timeout(700)
-        await page.click("#btn-play")
-        shot_taken = screenshot is None
-        for _ in range(900):
-            await page.wait_for_timeout(250)
-            if not shot_taken and await page.evaluate("document.querySelectorAll('.turn').length") >= 2:
-                await page.screenshot(path=str(screenshot))
-                shot_taken = True
-            if await page.evaluate("window.__replayDone === true"):
-                break
-        await page.wait_for_timeout(1200)
-        cite = await page.query_selector("#answer .cite")
-        if cite:
-            await cite.click()
-            await page.wait_for_timeout(2600)
-        video = page.video
-        await ctx.close()
-        await b.close()
-        return Path(await video.path())
-
-
-def srt_time(t: float) -> str:
-    h, rem = divmod(t, 3600)
-    mnt, s = divmod(rem, 60)
-    return f"{int(h):02d}:{int(mnt):02d}:{int(s):02d},{int((s - int(s)) * 1000):03d}"
+    data = storyboard_data()
+    order = [("scene", "title", 4.5), ("scene", "problem", 3.0), ("scene", "pipeline", 1.0),
+             ("scene", "timeline", 3.5)] + [("demo", s, sp) for s, sp in DEMOS] + \
+            [("scene", "results", 5.0), ("scene", "outro", 5.0)]
+    parts = []
+    server = start_server()
+    try:
+        async with async_playwright() as p:
+            for k, (kind, name, arg) in enumerate(order):
+                rec_dir = BUILD / f"rec_{k}"
+                rec_dir.mkdir(parents=True)
+                if kind == "scene":
+                    raw = await record_scene(p, name, data, arg, rec_dir)
+                    trim = 0.35
+                else:
+                    shot = ROOT / "docs" / "img" / "ui.png" if name == "demo-workshop" else None
+                    raw = await record_demo(p, name, arg, rec_dir, shot)
+                    trim = 1.6
+                part = BUILD / f"part_{k:02d}.mp4"
+                encode(raw, part, trim)
+                parts.append(part)
+                print(f"{k:02d} {kind:5s} {name:22s} {duration(part):6.1f}s", flush=True)
+    finally:
+        server.terminate()
+    lst = BUILD / "parts.txt"
+    lst.write_text("".join(f"file '{x}'\n" for x in parts))
+    run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy", "-movflags", "+faststart",
+         str(out_path)])
+    print(f"wrote {out_path}: {duration(out_path):.1f}s, {out_path.stat().st_size / 1e6:.1f} MB")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--piper", required=True)
-    ap.add_argument("--voice", required=True)
     ap.add_argument("--out", default=str(ROOT / "submission" / "DuplexRAG_demo.mp4"))
     a = ap.parse_args()
     if BUILD.exists():
         shutil.rmtree(BUILD)
     BUILD.mkdir(parents=True)
-    if not DECK_PDF.exists():
-        raise SystemExit(f"missing {DECK_PDF}; run scripts/make_deck.py first")
-    run(["pdftoppm", "-r", "144", "-png", str(DECK_PDF), str(BUILD / "slide")])
-    server = start_server()
-    parts, subs, t0 = [], [], 0.0
-    try:
-        for k, seg in enumerate(SEGMENTS):
-            wav = BUILD / f"narr_{k}.wav"
-            nd = tts(a.piper, a.voice, seg["text"], wav)
-            part = BUILD / f"part_{k}.mp4"
-            if seg["kind"] == "slide":
-                img = BUILD / f"slide-{seg['page']:02d}.png"
-                dur = nd + 1.0
-                run(["ffmpeg", "-y", "-loop", "1", "-i", str(img), "-i", str(wav), "-filter_complex",
-                     f"[0:v]scale={W}:{H},fps=30,format=yuv420p[v];[1:a]adelay=400|400,apad[a]", "-map", "[v]",
-                     "-map", "[a]", "-t", f"{dur:.2f}", "-c:v", "libx264", "-preset", "medium", "-crf", "24",
-                     "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2", str(part)])
-                lead = 0.4
-            else:
-                shot = ROOT / "docs" / "img" / "ui.png" if seg.get("screenshot") else None
-                rec = asyncio.run(record(seg["scenario"], BUILD, shot, seg.get("speed", "1")))
-                vd = duration(rec)
-                dur = max(vd, nd + 1.5)
-                run(["ffmpeg", "-y", "-i", str(rec), "-i", str(wav), "-filter_complex",
-                     f"[0:v]scale={W}:{H}:force_original_aspect_ratio=decrease,pad={W}:{H}:(ow-iw)/2:(oh-ih)/2,"
-                     f"fps=30,format=yuv420p,tpad=stop_mode=clone:stop_duration=30[v];[1:a]adelay=800|800,apad[a]",
-                     "-map", "[v]", "-map", "[a]", "-t", f"{dur:.2f}", "-c:v", "libx264", "-preset", "medium",
-                     "-crf", "26", "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2", str(part)])
-                lead = 0.8
-            parts.append(part)
-            # captions: split narration into sentences, time proportionally to their length
-            sents = [x.strip() for x in re.split(r"(?<=[.!?:])\s+", seg["text"]) if x.strip()]
-            total = sum(len(x) for x in sents)
-            cur = t0 + lead
-            for sent in sents:
-                d = nd * len(sent) / total
-                subs.append((cur, cur + d, sent))
-                cur += d
-            t0 += duration(part)
-            print(f"segment {k}: {seg['kind']} {duration(part):.1f}s (narration {nd:.1f}s)", flush=True)
-    finally:
-        server.terminate()
-    lst = BUILD / "parts.txt"
-    lst.write_text("".join(f"file '{p}'\n" for p in parts))
-    joined = BUILD / "joined.mp4"
-    run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy", str(joined)])
-    srt = Path(a.out).with_suffix(".srt")
-    srt.write_text("".join(f"{i}\n{srt_time(s)} --> {srt_time(e)}\n{txt}\n\n" for i, (s, e, txt) in enumerate(subs, 1)))
-    style = ("FontName=DejaVu Sans,FontSize=11,PrimaryColour=&H00FFFFFF,BackColour=&H26101014,BorderStyle=4,"
-             "Outline=0,Shadow=0,MarginV=10")
-    run(["ffmpeg", "-y", "-i", str(joined), "-vf", f"subtitles={srt}:force_style='{style}'", "-c:v", "libx264",
-         "-preset", "medium", "-crf", "26", "-c:a", "copy", str(a.out)])
-    print(f"wrote {a.out}: {duration(Path(a.out)):.1f}s, {Path(a.out).stat().st_size / 1e6:.1f} MB")
+    asyncio.run(build(Path(a.out)))
 
 
 if __name__ == "__main__":

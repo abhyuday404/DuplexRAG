@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DuplexRAG storyboard</title>
+<style>
+  :root {
+    --bg: #0b0f16; --panel: #141a24; --panel2: #1a2230; --line: #283346; --text: #eef2f8; --muted: #93a0b4;
+    --purple: #7c5cff; --blue: #3fb6ff; --green: #3ccf8e; --amber: #f5b041; --red: #ff6b6b;
+    --sans: "Noto Sans", "Liberation Sans", "DejaVu Sans", sans-serif; --mono: "JetBrainsMono NF", "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--sans); }
+  .scene { position: absolute; inset: 0; display: none; padding: 90px 120px; }
+  .scene.on { display: block; }
+  .bg-glow { position: absolute; inset: -200px; background:
+      radial-gradient(700px 500px at 20% 25%, rgba(124,92,255,.18), transparent 60%),
+      radial-gradient(800px 600px at 85% 80%, rgba(63,182,255,.12), transparent 60%); z-index: -1; }
+  h1 { font-size: 64px; font-weight: 800; letter-spacing: -.5px; }
+  h2 { font-size: 50px; font-weight: 800; letter-spacing: -.3px; }
+  .kicker { font: 600 22px var(--mono); color: var(--blue); letter-spacing: 3px; text-transform: uppercase; margin-bottom: 18px; }
+  .muted { color: var(--muted); }
+  .in { opacity: 0; transform: translateY(24px); animation: in .7s cubic-bezier(.2,.8,.2,1) forwards; }
+  .pop { opacity: 0; transform: scale(.6); animation: pop .5s cubic-bezier(.2,1.4,.4,1) forwards; }
+  .fade { opacity: 0; animation: fade .8s ease forwards; }
+  @keyframes in { to { opacity: 1; transform: none; } }
+  @keyframes pop { to { opacity: 1; transform: none; } }
+  @keyframes fade { to { opacity: 1; } }
+
+  /* ---------------- title */
+  #title { display: none; align-items: center; justify-content: center; flex-direction: column; text-align: center; }
+  #title.on { display: flex; }
+  .logo { position: relative; width: 190px; height: 130px; margin-bottom: 36px; }
+  .logo span { position: absolute; top: 0; width: 130px; height: 130px; border-radius: 50%; mix-blend-mode: screen; }
+  .logo span:first-child { background: var(--purple); left: 0; animation: slideL 1.2s cubic-bezier(.2,.8,.2,1) forwards; transform: translateX(-120px); opacity: 0; }
+  .logo span:last-child { background: var(--blue); right: 0; animation: slideR 1.2s cubic-bezier(.2,.8,.2,1) forwards; transform: translateX(120px); opacity: 0; }
+  @keyframes slideL { to { transform: none; opacity: .95; } }
+  @keyframes slideR { to { transform: none; opacity: .85; } }
+  .big { font-size: 128px; font-weight: 900; letter-spacing: -3px; }
+  .tag { font-size: 38px; color: var(--muted); margin-top: 10px; }
+  .chips { display: flex; gap: 18px; justify-content: center; margin-top: 46px; flex-wrap: wrap; }
+  .chip { font: 600 24px var(--sans); padding: 12px 24px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); }
+  .chip.p { border-color: var(--purple); color: #c9bcff; }
+  .chip.b { border-color: var(--blue); color: #a8dcff; }
+
+  /* ---------------- problem */
+  .utter { margin-top: 60px; font-size: 44px; line-height: 1.5; min-height: 200px; max-width: 1600px; }
+  .utter .w { opacity: 0; transition: opacity .15s; }
+  .utter .w.show { opacity: 1; }
+  .utter .hl { border-radius: 10px; padding: 0 6px; transition: background .4s, color .4s; }
+  .hl.a.lit { background: rgba(63,182,255,.25); color: #bfe6ff; }
+  .hl.b.lit { background: rgba(60,207,142,.25); color: #c6f5de; }
+  .hl.c.lit { background: rgba(245,176,65,.25); color: #ffe2ad; }
+  .clock { margin-top: 30px; height: 10px; background: var(--panel2); border-radius: 10px; position: relative; overflow: hidden; width: 1600px; }
+  .clock i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(90deg, var(--purple), var(--blue)); }
+  .intents { display: flex; gap: 26px; margin-top: 50px; }
+  .intent { font-size: 30px; font-weight: 700; padding: 18px 28px; border-radius: 16px; color: #0b0f16; }
+  .intent.a { background: var(--blue); } .intent.b { background: var(--green); } .intent.c { background: var(--amber); }
+  .follow { display: flex; gap: 40px; margin-top: 60px; }
+  .bubble { background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 26px 32px; font-size: 30px; width: 760px; }
+  .bubble b { display: block; margin-top: 12px; font-size: 26px; color: var(--purple); }
+
+  /* ---------------- pipeline */
+  .stages { display: flex; gap: 34px; margin-top: 70px; position: relative; padding-bottom: 50px; }
+  .stage { width: 390px; min-height: 330px; background: var(--panel); border: 2px solid var(--line); border-radius: 24px; padding: 28px; position: relative; }
+  .stage .n { font: 700 22px var(--mono); color: var(--purple); }
+  .stage h3 { font-size: 30px; margin: 10px 0 16px; }
+  .stage p { font-size: 22px; color: var(--muted); line-height: 1.45; }
+  .stage.lit { border-color: var(--purple); box-shadow: 0 0 0 6px rgba(124,92,255,.15), 0 20px 60px rgba(124,92,255,.15); }
+  .flow { position: absolute; top: 175px; height: 4px; background: var(--line); width: 34px; }
+  .dot { position: absolute; width: 18px; height: 18px; border-radius: 50%; background: var(--blue); top: 352px; box-shadow: 0 0 18px var(--blue); opacity: 0; }
+  .rail { position: absolute; left: 185px; right: 185px; top: 359px; height: 4px; border-radius: 4px; background: var(--line); }
+  .band { margin-top: 44px; padding: 20px 28px; border-radius: 18px; border: 2px dashed var(--blue); color: #a8dcff; font-size: 26px; background: rgba(63,182,255,.06); }
+  .band.pulse { animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 50% { background: rgba(63,182,255,.16); } }
+  .tele { margin-top: 26px; padding: 18px 28px; border-radius: 18px; border: 2px solid var(--amber); color: #ffd98f; font-size: 24px; background: rgba(245,176,65,.06); }
+
+  /* ---------------- timeline */
+  .lanes { margin-top: 70px; position: relative; width: 1680px; }
+  .lane { display: flex; align-items: center; height: 120px; margin-bottom: 30px; }
+  .lane .lab { width: 330px; font-size: 28px; font-weight: 700; }
+  .track { position: relative; flex: 1; height: 90px; background: var(--panel); border-radius: 16px; border: 1px solid var(--line); overflow: visible; }
+  .speech { position: absolute; left: 0; top: 22px; height: 46px; width: 0; border-radius: 10px; background: linear-gradient(90deg, rgba(124,92,255,.5), rgba(124,92,255,.8)); }
+  .blk { position: absolute; top: 20px; height: 50px; border-radius: 8px; opacity: 0; }
+  .blk.s { background: var(--blue); } .blk.m { background: var(--green); } .blk.f { background: var(--amber); }
+  .eos { position: absolute; top: -30px; bottom: -150px; width: 3px; background: var(--red); opacity: 0; }
+  .eos span { position: absolute; top: -34px; left: -80px; width: 200px; color: var(--red); font: 600 22px var(--mono); }
+  .tok { position: absolute; top: -6px; height: 102px; width: 4px; background: #fff; opacity: 0; }
+  .tok span { position: absolute; left: 12px; top: 26px; white-space: nowrap; font: 700 30px var(--mono); }
+  .legend { display: flex; gap: 36px; margin-top: 30px; font-size: 22px; color: var(--muted); }
+  .legend i { display: inline-block; width: 24px; height: 14px; border-radius: 4px; margin-right: 10px; vertical-align: middle; }
+
+  /* ---------------- results */
+  .res { display: grid; grid-template-columns: 1.25fr 1fr; gap: 70px; margin-top: 50px; }
+  .bars { display: flex; flex-direction: column; gap: 22px; }
+  .bar { display: grid; grid-template-columns: 330px 1fr; align-items: center; gap: 20px; }
+  .bar .lab2 { font-size: 24px; }
+  .pair { display: flex; flex-direction: column; gap: 6px; }
+  .fill { height: 26px; border-radius: 8px; width: 0; transition: width 1.4s cubic-bezier(.2,.8,.2,1); position: relative; }
+  .fill.d { background: linear-gradient(90deg, var(--purple), var(--blue)); }
+  .fill.b { background: #4a536a; height: 16px; }
+  .fill em { position: absolute; right: -80px; top: -4px; font: 700 24px var(--mono); font-style: normal; }
+  .fill.b em { font-size: 18px; color: var(--muted); top: -3px; right: -70px; }
+  .gates { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .gate { display: flex; align-items: center; gap: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 22px; font-size: 23px; }
+  .gate .ok { width: 44px; height: 44px; border-radius: 50%; background: var(--green); color: #07130d; font-weight: 900; display: flex; align-items: center; justify-content: center; font-size: 26px; }
+  .gate small { display: block; color: var(--muted); font-size: 19px; }
+  .kpis { display: flex; gap: 26px; margin-top: 40px; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 20px 26px; min-width: 250px; }
+  .kpi b { display: block; font: 800 44px var(--mono); color: #fff; }
+  .kpi span { color: var(--muted); font-size: 20px; }
+
+  /* ---------------- outro */
+  #outro { display: none; align-items: center; justify-content: center; flex-direction: column; text-align: center; }
+  #outro.on { display: flex; }
+  .url { font: 700 44px var(--mono); color: var(--blue); margin-top: 26px; }
+  .facts { display: flex; gap: 20px; margin-top: 50px; flex-wrap: wrap; justify-content: center; max-width: 1500px; }
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+
+<section class="scene" id="title">
+  <div class="logo"><span></span><span></span></div>
+  <div class="big in" style="animation-delay:.6s">DuplexRAG</div>
+  <div class="tag in" style="animation-delay:1.1s">Streaming live RAG - retrieve while the user is still speaking</div>
+  <div class="chips">
+    <div class="chip p pop" style="animation-delay:1.9s">Samsung PRISM GenAI Hackathon 2026 · Theme 4</div>
+    <div class="chip b pop" style="animation-delay:2.2s">Team Pokermons · VITV</div>
+  </div>
+</section>
+
+<section class="scene" id="problem">
+  <div class="kicker in">The problem</div>
+  <h2 class="in" style="animation-delay:.2s">One natural request. Several hidden questions.</h2>
+  <div class="utter" id="utter"></div>
+  <div class="clock"><i id="clockbar"></i></div>
+  <div class="intents" id="intents"></div>
+  <div class="follow" id="follow"></div>
+</section>
+
+<section class="scene" id="pipeline">
+  <div class="kicker in">How DuplexRAG works</div>
+  <h2 class="in" style="animation-delay:.2s">Event-driven: every transcript chunk moves the pipeline forward</h2>
+  <div class="stages" id="stages">
+    <div class="stage" data-i="0"><div class="n">01</div><h3>Retrieval controller</h3><p>Turn gate: retrieval / refinement / presentation / chit-chat. Stability gate per clause: wait, retrieve or suppress.</p></div>
+    <div class="stage" data-i="1"><div class="n">02</div><h3>Multi-intent decomposer</h3><p>Self-repairs, spoken numbers, request vs context clauses, context carry-over, anaphora.</p></div>
+    <div class="stage" data-i="2"><div class="n">03</div><h3>Retrieval &amp; fusion</h3><p>BM25 + bge-small dense, reciprocal-rank fusion, MiniLM cross-encoder rerank - on a CPU.</p></div>
+    <div class="stage" data-i="3"><div class="n">04</div><h3>Session-aware synthesis</h3><p>Cited extractive claims, claim verifier, uncertainty flags, versioned answers (v1 → v2).</p></div>
+  </div>
+  <div class="band" id="band">Speculative retrieval runs <b>while the user is still speaking</b> - results are reused at end of speech unless a late entity invalidates them</div>
+  <div class="tele" id="tele">Telemetry: every chunk, decision, sub-query, retrieval, version, grounding check, TTFT and cost → JSON Lines</div>
+</section>
+
+<section class="scene" id="timeline">
+  <div class="kicker in">Why streaming matters</div>
+  <h2 class="in" style="animation-delay:.2s">Same retrieval stack - the only change is <span style="color:var(--blue)">when</span> it runs</h2>
+  <div class="lanes">
+    <div class="lane"><div class="lab">User speaking</div><div class="track"><div class="speech" id="speech"></div></div></div>
+    <div class="lane"><div class="lab" style="color:#c9bcff">DuplexRAG</div><div class="track" id="t1"></div></div>
+    <div class="lane"><div class="lab muted">Retrieve at end of speech</div><div class="track" id="t2"></div></div>
+    <div class="eos" id="eos"><span>end of speech</span></div>
+  </div>
+  <div class="legend"><span><i style="background:var(--blue)"></i>provisional search</span><span><i style="background:var(--green)"></i>multi-intent search</span><span><i style="background:var(--amber)"></i>search after speech</span></div>
+</section>
+
+<section class="scene" id="results">
+  <div class="kicker in">Evaluation · test set written independently after the engine freeze</div>
+  <h2 class="in" style="animation-delay:.2s">Final held-out results</h2>
+  <div class="res">
+    <div class="bars" id="bars"></div>
+    <div class="gates" id="gates"></div>
+  </div>
+  <div class="kpis" id="kpis"></div>
+</section>
+
+<section class="scene" id="outro">
+  <div class="logo"><span></span><span></span></div>
+  <div class="big in" style="animation-delay:.5s;font-size:96px">DuplexRAG</div>
+  <div class="url in" style="animation-delay:1s">github.com/abhyuday404/DuplexRAG</div>
+  <div class="facts">
+    <div class="chip pop" style="animation-delay:1.6s">CPU-only · 2 small open models</div>
+    <div class="chip pop" style="animation-delay:1.8s">no LLM in the loop</div>
+    <div class="chip pop" style="animation-delay:2.0s">zero fabricated citations</div>
+    <div class="chip pop" style="animation-delay:2.2s">Docker · replay benchmark · live mic demo</div>
+  </div>
+  <div class="tag in" style="animation-delay:2.8s;margin-top:50px">Team Pokermons · VITV</div>
+</section>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let D = {};
+
+async function problem() {
+  const words = ("I need to plan a customer workshop in [Pune for thirty people], and I need the " +
+                 "{cancellation policy} and the <catering options>.").split(" ");
+  const u = $("#utter");
+  const cls = { "[": "a", "{": "b", "<": "c" };
+  let cur = null;
+  for (const w of words) {
+    let t = w;
+    const open = Object.keys(cls).find((k) => t.startsWith(k));
+    if (open) { cur = document.createElement("span"); cur.className = "hl " + cls[open]; u.appendChild(cur); t = t.slice(1); }
+    const close = /[\]}>]/.exec(t);
+    const sp = document.createElement("span");
+    sp.className = "w"; sp.textContent = t.replace(/[\]}>]/, "") + " ";
+    (cur || u).appendChild(sp);
+    if (close) cur = null;
+  }
+  await sleep(900);
+  const ws = [...document.querySelectorAll(".utter .w")];
+  const bar = $("#clockbar");
+  for (let i = 0; i < ws.length; i++) {
+    ws[i].classList.add("show");
+    bar.style.width = ((i + 1) / ws.length * 100) + "%";
+    await sleep(190);
+  }
+  const labs = [["a", "venue capacity for 30"], ["b", "cancellation terms"], ["c", "catering options"]];
+  for (const [c, l] of labs) {
+    await sleep(500);
+    document.querySelector(".hl." + c).classList.add("lit");
+    const d = document.createElement("div"); d.className = "intent pop " + c; d.textContent = l;
+    $("#intents").appendChild(d);
+  }
+  await sleep(1300);
+  const f = [["“Actually it's going to be fifty people.”", "→ refine the answer in place, don't restart"],
+             ["“Can you repeat that in two bullets?”", "→ presentation only: no retrieval, same citations"]];
+  for (const [q, a] of f) {
+    const b = document.createElement("div"); b.className = "bubble in"; b.innerHTML = q + "<b>" + a + "</b>";
+    $("#follow").appendChild(b); await sleep(1100);
+  }
+}
+
+async function pipeline() {
+  const st = [...document.querySelectorAll(".stage")];
+  st.forEach((s) => { s.style.opacity = 0; s.style.transform = "translateY(30px)"; s.style.transition = "all .6s"; });
+  $("#band").style.opacity = 0; $("#tele").style.opacity = 0;
+  $("#band").style.transition = $("#tele").style.transition = "opacity .8s";
+  await sleep(700);
+  for (const s of st) { s.style.opacity = 1; s.style.transform = "none"; await sleep(650); }
+  // flowing dots between stages
+  const wrap = $("#stages");
+  for (let k = 0; k < 3; k++) {
+    const x = 390 * (k + 1) + 34 * k;
+    const line = document.createElement("div"); line.className = "flow"; line.style.left = x + "px"; wrap.appendChild(line);
+  }
+  $("#band").style.opacity = 1; $("#band").classList.add("pulse");
+  const rail = document.createElement("div"); rail.className = "rail"; wrap.appendChild(rail);
+  const dot = document.createElement("div"); dot.className = "dot"; wrap.appendChild(dot);
+  for (let loop = 0; loop < 3; loop++) {
+    for (let i = 0; i < 4; i++) {
+      st.forEach((s, j) => s.classList.toggle("lit", j === i));
+      dot.style.transition = "none"; dot.style.opacity = 1;
+      dot.style.left = (390 * i + 34 * i + 186) + "px";
+      await sleep(80);
+      if (i < 3) { dot.style.transition = "left .9s ease-in-out"; dot.style.left = (390 * (i + 1) + 34 * (i + 1) + 185) + "px"; }
+      await sleep(900);
+      if (loop === 0 && i === 1) $("#tele").style.opacity = 1;
+    }
+  }
+  st.forEach((s) => s.classList.remove("lit"));
+}
+
+async function timeline() {
+  const T = 18.0, W = $("#t1").clientWidth, px = (s) => (s / T) * W;
+  const endS = D.speech_s || 11.7;
+  const sp = $("#speech"); sp.style.transition = `width ${endS * 0.42}s linear`;
+  await sleep(600);
+  sp.style.width = px(endS) + "px";
+  const blocks = D.duplex_blocks || [[3.8, 0.5, "s"], [5.5, 0.5, "s"], [8.5, 0.6, "m"], [11.3, 0.6, "m"]];
+  for (const [s, d, c] of blocks) {
+    setTimeout(() => { const b = document.createElement("div"); b.className = "blk " + c + " pop";
+      b.style.left = px(s) + "px"; b.style.width = Math.max(px(d), 10) + "px"; $("#t1").appendChild(b); }, s * 420 + 600);
+  }
+  await sleep(endS * 420 + 700);
+  const eos = $("#eos"); eos.style.left = (330 + px(endS)) + "px"; eos.style.transition = "opacity .4s"; eos.style.opacity = 1;
+  await sleep(500);
+  const t1 = document.createElement("div"); t1.className = "tok"; t1.style.left = px(endS + (D.ttft_on || 0.007)) + 4 + "px";
+  t1.innerHTML = `<span style="color:var(--green)">first token +${Math.round((D.ttft_on || 0.007) * 1000)} ms</span>`;
+  t1.style.transition = "opacity .4s"; $("#t1").appendChild(t1); await sleep(50); t1.style.opacity = 1;
+  const off = D.ttft_off || 0.614;
+  const b = document.createElement("div"); b.className = "blk f"; b.style.left = px(endS) + "px"; b.style.width = "0px";
+  b.style.opacity = 1; b.style.transition = `width ${off * 2.2}s linear`; $("#t2").appendChild(b);
+  await sleep(60); b.style.width = px(off) + "px";
+  await sleep(off * 2200 + 100);
+  const t2 = document.createElement("div"); t2.className = "tok"; t2.style.left = px(endS + off) + 4 + "px";
+  t2.innerHTML = `<span style="color:var(--amber)">first token +${Math.round(off * 1000)} ms</span>`;
+  t2.style.transition = "opacity .4s"; $("#t2").appendChild(t2); await sleep(50); t2.style.opacity = 1;
+}
+
+async function results() {
+  const bars = D.bars || [];
+  for (const [lab, a, b] of bars) {
+    const row = document.createElement("div"); row.className = "bar in";
+    row.innerHTML = `<div class="lab2">${lab}</div><div class="pair"><div class="fill d"><em>${a}%</em></div><div class="fill b"><em>${b}%</em></div></div>`;
+    $("#bars").appendChild(row);
+    await sleep(250);
+    row.querySelector(".fill.d").style.width = (a * 4.6) + "px";
+    row.querySelector(".fill.b").style.width = Math.max(b * 4.6, 4) + "px";
+  }
+  const leg = document.createElement("div"); leg.className = "legend fade";
+  leg.innerHTML = '<span><i style="background:var(--purple)"></i>DuplexRAG</span><span><i style="background:#4a536a"></i>turn-based baseline</span>';
+  $("#bars").appendChild(leg);
+  for (const [g, t, s] of D.gates || []) {
+    await sleep(380);
+    const el = document.createElement("div"); el.className = "gate pop";
+    el.innerHTML = `<div class="ok">✓</div><div>${g} <b>${t}</b><small>${s}</small></div>`;
+    $("#gates").appendChild(el);
+  }
+  for (const [v, l] of D.kpis || []) {
+    await sleep(300);
+    const k = document.createElement("div"); k.className = "kpi pop"; k.innerHTML = `<b>${v}</b><span>${l}</span>`;
+    $("#kpis").appendChild(k);
+  }
+}
+
+window.start = async (scene, data) => {
+  D = data || {};
+  document.querySelectorAll(".scene").forEach((s) => s.classList.toggle("on", s.id === scene));
+  if (scene === "problem") await problem();
+  if (scene === "pipeline") await pipeline();
+  if (scene === "timeline") await timeline();
+  if (scene === "results") await results();
+  window.__sceneDone = true;
+};
+</script>
+</body>
+</html>

@@ -123,7 +123,7 @@ Held-out test split (30 sessions, 74 turns, written independently after the engi
 | Reproducible repository: source, pinned lockfile, config template, one-command run | `pyproject.toml` + `uv.lock`, `.env.example`, `docker-compose.yml`, `Dockerfile`, `scripts/smoke_test.sh` |
 | System architecture brief (≤ 6 pages) | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Benchmarking & evaluation report (baseline comparison, ≥ 3 failure analyses, 2+ ablations) | [docs/BENCHMARK.md](docs/BENCHMARK.md), raw outputs in `results/` |
-| System demonstration video (≤ 5 min) | `submission/DuplexRAG_demo.mp4` (+ `.srt` captions) |
+| System demonstration video (≤ 5 min) | `submission/DuplexRAG_demo.mp4` - 3 min silent walkthrough: motion graphics + guided tours of live replays (`scripts/make_video.py`) |
 | Telemetry & observability schema | [docs/TELEMETRY.md](docs/TELEMETRY.md), [schemas/telemetry.schema.json](schemas/telemetry.schema.json) |
 | Presentation / AI disclosure | `submission/VITV_Pokermons_Submission.pptx` (+ PDF), `submission/LangAI3.0_AI_Disclosure.docx` |
 
