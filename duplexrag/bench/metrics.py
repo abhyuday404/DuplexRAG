@@ -82,7 +82,7 @@ def evaluate(records: list[dict], gold_sessions: list[dict], events: list[dict] 
     hit3, recall5, keyfacts = [], [], []
     claims = supported = fabricated = 0
     cite_prec = []
-    unans_flagged, false_flag = [], []
+    unans_flagged, false_flag, coverage_notes = [], [], []
     g5 = []
     g5_detail = []
     ttft, post_ms, cost_usd, cpu_ms, tokens = [], [], [], [], []
@@ -134,10 +134,13 @@ def evaluate(records: list[dict], gold_sessions: list[dict], events: list[dict] 
             # ---------------- uncertainty
             if g["retrieval_required"]:
                 has_unc = bool(r.get("uncertainty"))
+                # intent-level "not in the corpus" flags (entity coverage notes carry a doc_id)
+                intent_unc = any("doc_id" not in u for u in r.get("uncertainty", []))
                 if any(not it["answerable"] for it in g["intents"]):
                     unans_flagged.append(has_unc)
                 elif g["intents"]:
-                    false_flag.append(has_unc)
+                    false_flag.append(intent_unc)
+                    coverage_notes.append(any("doc_id" in u for u in r.get("uncertainty", [])))
             # ---------------- G4
             if r["kind"] in ("retrieval", "refinement"):
                 gr = r["grounding"]
@@ -189,6 +192,7 @@ def evaluate(records: list[dict], gold_sessions: list[dict], events: list[dict] 
         "G4_fabricated_ids": fabricated,
         "unanswerable_flagged_pct": _pct(unans_flagged),
         "false_uncertainty_pct": _pct(false_flag),
+        "entity_coverage_notes_pct": _pct(coverage_notes),
         "G5_refinement_pass_pct": _pct(g5),
         "G5_refinement_turns": len(g5),
         "G5_detail": g5_detail,

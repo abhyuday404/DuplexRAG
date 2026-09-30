@@ -47,6 +47,15 @@ def _sigmoid(x: float) -> float:
     return float(1 / (1 + np.exp(-x)))
 
 
+def _mentions(term: str, tokens: set[str]) -> bool:
+    """Stem match, tolerant to derivations ("cancel" ~ "cancellation", "reimburse" ~ "reimbursement")."""
+    if term in tokens:
+        return True
+    if len(term) < 5:
+        return False
+    return any(t.startswith(term) or (len(t) >= 5 and term.startswith(t)) for t in tokens)
+
+
 class Composer:
     def __init__(self, index, models, settings):
         self.index = index
@@ -85,8 +94,9 @@ class Composer:
         """'Is there parking at the Sector 62 centre?' -> if the entity's own document never mentions
         the asked-about attribute (while the evidence *is* about that entity), say so explicitly."""
         origin = intent.query.origin
-        named = {stem(w.lower()) for w in re.findall(r"\b[A-Z][A-Za-z0-9-]+", origin)} | \
-                {t for t in content_tokens(origin) if t in self.index.proper_terms}
+        # entities: capitalised words anywhere in the query (includes entities carried from context)
+        named = {stem(w.lower()) for w in re.findall(r"(?<![.?!]\s)(?<!^)\b[A-Z][A-Za-z0-9-]+", intent.query.text)}
+        named |= {stem(w.lower()) for w in re.findall(r"\b[A-Z][A-Za-z0-9-]+", origin)[1:]}
         named -= {"i"}
         docs: dict[str, set[str]] = {}
         for c in self.index.chunks:
@@ -107,17 +117,35 @@ class Composer:
         for c in self.index.chunks:
             if c.doc_id in docs:
                 text |= set(content_tokens(c.index_text()))
-        if any(t in text for t in aspect):
+        if any(_mentions(t, text) for t in aspect):
             return None
         name = next(c.short_title for c in self.index.chunks if c.doc_id in docs)
         return f"{name} does not mention {' / '.join(aspect[:2])}"
+
+    def aspect_unaddressed(self, intent: Intent) -> str | None:
+        """With weak evidence, require that at least one evidence section actually talks about
+        one of the asked-about terms; otherwise the retriever only found topical neighbours."""
+        hits = self.usable(intent.evidence)[:3]
+        if not hits or hits[0].score >= 0.0:
+            return None
+        named = {stem(w.lower()) for w in re.findall(r"\b[A-Z][A-Za-z0-9-]+", intent.query.origin)}
+        aspect = [t for t in content_tokens(intent.query.origin) if t not in GENERIC and not t.isdigit()
+                  and t not in named and self.index.salience(t) > 0]
+        if len(aspect) < 2:          # a single word is too weak a signal (paraphrase is common)
+            return None
+        for h in hits:
+            ch = self.index.chunks[h.idx]
+            toks = set(content_tokens(f"{ch.section_title} {ch.text}"))
+            if any(_mentions(t, toks) for t in aspect):
+                return None
+        return f"the retrieved sections do not address {' / '.join(aspect[:2])}"
 
     def uncertainty_reason(self, intent: Intent, selected_text: str) -> str | None:
         hits = intent.evidence
         best = hits[0].score if hits else -99.0
         if best < self.s.evidence_threshold:
             return "no sufficiently relevant evidence in the corpus"
-        gap = self.entity_attribute_gap(intent)
+        gap = self.entity_attribute_gap(intent) or self.aspect_unaddressed(intent)
         if gap:
             return gap
         kind = self.expected_answer_type(intent.query.origin)
@@ -158,8 +186,12 @@ class Composer:
             s += "."
         return s
 
-    def select_sentences(self, intent: Intent, evidence: list[Hit]) -> list[tuple[int, int, float]]:
-        """Return [(chunk_idx, sentence_idx, score)] for the claims of one intent."""
+    def select_sentences(self, intent: Intent, evidence: list[Hit], limit: int | None = None
+                         ) -> list[tuple[int, int, float]]:
+        """Pick the answer units for one intent: [(chunk_idx, sentence_idx, score)].
+
+        Score = cross-encoder sentence logit (computed inside the retrieval job, i.e. usually while
+        the user is still speaking) + bi-encoder similarity + lexical overlap + specificity cues."""
         if not evidence:
             return []
         qvec = self.models.embed_queries([intent.query.text])[0]
@@ -168,17 +200,17 @@ class Composer:
         need = intent.query.constraints.get("people")
         cands = []
         top = evidence[0].score
-        for rank, h in enumerate(evidence):
+        for h in evidence:
             ch = self.index.chunks[h.idx]
             if not ch.sentences:
                 continue
-            sv = self.index.sentence_vecs(h.idx)
-            sims = sv @ qvec
+            sims = self.index.sentence_vecs(h.idx) @ qvec
             chunk_bonus = 0.25 * _sigmoid(h.score - top + 2.0)
             for si, sent in enumerate(ch.sentences):
+                ce = h.sent_scores[si] if h.sent_scores and h.sent_scores[si] is not None else -8.0
                 stoks = set(content_tokens(sent)) | self._subject_tokens(ch)
                 lex = len(qtok & stoks) / max(1, len(qtok))
-                score = float(sims[si]) + 0.30 * lex + chunk_bonus
+                score = 0.25 * max(-3.0, min(3.0, ce / 4)) + float(sims[si]) + 0.20 * lex + chunk_bonus
                 nums = numbers_in(sent)
                 if nums:
                     score += 0.06      # specific (figures, limits, days) beats generic
@@ -200,13 +232,16 @@ class Composer:
             return []
         cands.sort(key=lambda c: -c[2])
         best = cands[0][2]
+        top_cat = self.index.chunks[evidence[0].idx].category
         docs_close = []
         for h in evidence:
-            d = self.index.chunks[h.idx].doc_id
-            if h.score >= top - 3.0 and h.score >= self.s.aspect_threshold and d not in docs_close:
-                docs_close.append(d)
+            c = self.index.chunks[h.idx]
+            # enumerate entities only across sibling documents of the same kind (e.g. venue fact sheets)
+            if h.score >= top - 3.0 and h.score >= self.s.aspect_threshold and c.doc_id not in docs_close \
+                    and c.category == top_cat:
+                docs_close.append(c.doc_id)
         enumerative = len(docs_close) >= 2
-        limit = self.s.max_sentences_per_intent + (1 if enumerative else 0)
+        limit = limit or (self.s.max_sentences_per_intent + (1 if enumerative else 0))
         chosen: list[tuple[int, int, float]] = []
         per_chunk: dict[int, int] = {}
 
@@ -214,21 +249,31 @@ class Composer:
             v = self.index.sentence_vecs(ci)[si]
             return any(float(self.index.sentence_vecs(c)[s] @ v) > 0.92 for c, s, _ in chosen)
 
-        if enumerative:   # one best sentence from each close entity document, nothing else
+        if enumerative:   # the best sentence(s) of each close entity document, nothing else
+            per_doc = 2 if len(docs_close) <= 3 else 1
             for d in docs_close[:limit]:
+                doc_best = None
+                taken = 0
                 for ci, si, sc, dd in cands:
-                    if dd == d and sc >= best - 0.25 and not redundant(ci, si):
-                        chosen.append((ci, si, sc))
-                        per_chunk[ci] = per_chunk.get(ci, 0) + 1
+                    if dd != d or sc < best - 0.6 or redundant(ci, si):
+                        continue
+                    if need and doc_best is not None:
+                        vals = [float(n) for n in numbers_in(self.index.chunks[ci].sentences[si])]
+                        if vals and all(v < need for v in vals):
+                            continue          # a room too small for the group adds nothing
+                    if doc_best is not None and sc < doc_best - 0.3:
+                        break
+                    chosen.append((ci, si, sc))
+                    doc_best = sc if doc_best is None else doc_best
+                    taken += 1
+                    if taken >= per_doc:
                         break
             return chosen
         strong = {h.idx for h in evidence if h.score >= top - 2.0}
-        best_chunk = cands[0][0]
         for ci, si, sc, _ in cands:
             if len(chosen) >= limit:
                 break
-            floor = best - (0.18 if ci == best_chunk else 0.12)
-            if ci not in strong or sc < floor or per_chunk.get(ci, 0) >= 2 or \
+            if ci not in strong or sc < best - 0.45 or per_chunk.get(ci, 0) >= 3 or \
                     any(ci == c and si == s for c, s, _ in chosen):
                 continue
             if redundant(ci, si):
@@ -237,9 +282,10 @@ class Composer:
             per_chunk[ci] = per_chunk.get(ci, 0) + 1
         return chosen
 
-    def compose_intent(self, session: Session, intent: Intent, version: int) -> list[Claim]:
+    def compose_intent(self, session: Session, intent: Intent, version: int, limit: int | None = None
+                       ) -> list[Claim]:
         evidence = self.usable(intent.evidence)
-        picks = self.select_sentences(intent, evidence)
+        picks = self.select_sentences(intent, evidence, limit)
         # keep document order stable and name each entity once
         order = {ci: k for k, (ci, _, _) in enumerate(picks)}
         picks.sort(key=lambda p: (order[p[0]], p[1]))

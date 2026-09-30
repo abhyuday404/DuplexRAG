@@ -19,7 +19,7 @@ import numpy as np
 from .corpus import Chunk, corpus_fingerprint, load_corpus
 from .text import STOPWORDS, content_tokens, raw_tokens, stem
 
-INDEX_VERSION = 5
+INDEX_VERSION = 6
 
 
 def sentence_index_text(chunk: Chunk, sentence: str) -> str:
@@ -85,7 +85,7 @@ class HybridIndex:
                 lower[t] += 1
         # a proper noun is a capitalised word that (almost) never appears lower-cased
         self.proper_terms = {stem(w) for w, n in proper.items()
-                             if w not in STOPWORDS and n >= 1 and lower[w] - n <= max(1, n // 4)}
+                             if w not in STOPWORDS and n >= 1 and lower[w] - n <= 0}
 
     def salience(self, token_stem: str) -> float:
         """0..1 informativeness of a stemmed token w.r.t. this corpus (0 = unknown)."""

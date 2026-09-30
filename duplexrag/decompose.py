@@ -51,6 +51,8 @@ _PREP_START = re.compile(r"^(for|at|in|on|to|from|with|within|about|regarding|du
                          r"around|roughly|approximately|more like|by|until|than|because|since|cause|so that|"
                          r"as long as|unless|\d+)\b", re.I)
 _WH_ANYWHERE = re.compile(r"\b(what|what's|how|which|when|where|who|whether)\b", re.I)
+_DISTINCT_Q = re.compile(r"^(how (often|long|much|many|early|late|soon|quickly|far)|when|when's|where|where's|who|"
+                         r"who's|which|is it|are they|can it|does it|do they)\b", re.I)
 
 QUESTION_START = re.compile(
     r"^(what|what's|whats|how|which|when|when's|where|where's|who|who's|whom|whose|why|is|are|am|was|were|do|does|"
@@ -154,6 +156,8 @@ ALIASES = [  # common spoken variants of place / country names (general knowledg
     (r"\b(the )?U\.?S\.?A?\b|\bthe States\b|\bAmerica\b", "USA"), (r"\bU\.?K\.?\b|\bBritain\b|\bEngland\b", "UK"),
     (r"\bBangalore\b", "Bengaluru"), (r"\bBombay\b", "Mumbai"), (r"\bMadras\b", "Chennai"),
     (r"\bGurgaon\b", "Gurugram"), (r"\bPoona\b", "Pune"), (r"\bwi-?fi\b", "Wi-Fi"),
+    (r"(?i:\b(pounds?|quid|sterling)\b)", "GBP"), (r"(?i:\beuros?\b)", "EUR"), (r"(?i:\bdollars?\b)", "USD"),
+    (r"(?i:\byen\b)", "JPY"), (r"(?i:\brupees?\b)", "INR"),
 ]
 
 
@@ -256,6 +260,8 @@ class Decomposer:
             has_prev_request = any(c.kind == "request" for c in clauses)
             if not content and not proper and people is None:
                 kind = "qempty" if (question or has_req) and seg else "filler"
+                if kind == "qempty" and _DISTINCT_Q.search(seg) and clauses:
+                    kind = "request"      # "... and how often do we have to change it?" is its own need
             elif CONTEXT_START.search(seg) and not QUESTION_START.search(seg) and not (
                     _WH_ANYWHERE.search(seg) and seg.rstrip().endswith("?")):
                 kind = "context"
@@ -356,7 +362,8 @@ class Decomposer:
         if session_ctx:
             surf = {**_surface_map(" ".join(session_ctx.get("surface", []))), **surf}
         requests = [c for c in clauses if c.kind == "request" and (c.complete or include_incomplete)]
-        requests = [c for c in requests if len(c.content) + len(c.proper) + (c.people is not None) >= 1]
+        requests = [c for c in requests if len(c.content) + len(c.proper) + (c.people is not None) >= 1
+                    or _DISTINCT_Q.search(c.text)]
         # a follow-up turn with no local entities/topic whose anchor is anaphoric ("those lab machines",
         # "that same trip") inherits the session's entities for every sub-query of the turn
         anchor = ctx["anchor"]
@@ -380,7 +387,7 @@ class Decomposer:
             if len(c.content) < 1:
                 extra += [t for t in session_topic if t not in have]
             # 3) "how often do we have to change it" -> resolve against the anchor clause
-            if c is not ctx["anchor"] and not c.proper and anaphoric:
+            if c is not ctx["anchor"] and not c.proper and anaphoric and len(c.content) < 2:
                 extra += [t for t in ctx["anchor_topic"] if t not in have]
             extra = list(dict.fromkeys(extra))[:6]
             n = c.people or ctx["people"]
@@ -391,12 +398,18 @@ class Decomposer:
                 # a head-count implies a capacity need; lead with it (cross-encoders weight query onsets)
                 facet = f"room or venue capacity for {n} people: "
                 body = re.sub(rf"\bfor\s+{n}\s+\w+", "", body).strip()
-            elif n:
+            elif n and len(c.content) <= 1:
                 suffix = f" for an event with {n} people"     # thresholds often depend on group size
+            elif re.search(r"\bhow many (people|guests|attendees|of us)\b|\b(hold|fit|seat|accommodate)\b", body,
+                           re.I):
+                facet = "capacity: "                           # "how many people can it hold" -> capacity
             text = facet + body + suffix + ("" if not extra else " " + " ".join(surf.get(t, t) for t in extra))
             kw = " ".join(dict.fromkeys(content_tokens(text)))
+            # vague clauses ("any safety stuff") can be *hurt* by carried context: hedge with a
+            # context-free variant that keeps only entities named in the clause itself
+            alt = (facet + body + suffix).strip() if extra and len(c.content) <= 1 and not anaphoric else ""
             out.append(SubQuery(qid=f"{id_prefix}{i + 1}", text=text.strip(), keywords=kw, origin=c.text,
-                                anchor=(c is ctx["anchor"]), constraints={"people": n} if n else {}))
+                                anchor=(c is ctx["anchor"]), constraints={"people": n} if n else {}, alt=alt))
         return out
 
     def session_context(self, clauses: list[Clause]) -> dict:

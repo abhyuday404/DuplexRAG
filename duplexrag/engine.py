@@ -352,8 +352,16 @@ class DuplexEngine:
             return qs
         vecs = self.models.embed_queries([q.text for q in qs])
         keep: list[int] = []
+        own = [set(content_tokens(q.origin)) for q in qs]
+
+        def same_need(k: int, i: int) -> bool:
+            # near-identical meaning AND overlapping own words ("how long must the password be" and
+            # "how often must it change" are similar in embedding space but are two needs)
+            jac = len(own[k] & own[i]) / max(1, len(own[k] | own[i]))
+            return float(vecs[k] @ vecs[i]) >= self.s.dedup_cosine and jac >= 0.34
+
         for i in range(len(qs)):
-            dup = next((k for k in keep if float(vecs[k] @ vecs[i]) >= self.s.dedup_cosine), None)
+            dup = next((k for k in keep if same_need(k, i)), None)
             if dup is None:
                 keep.append(i)
             else:
@@ -435,8 +443,9 @@ class DuplexEngine:
             ans.intents[iid] = Intent(iid, self.decomposer.label(q.origin.split(" | ")[0]), q,
                                       results.get(q.qid, []), ans.version)
         seen: dict[str, str] = {}        # claim text -> intent that already states it
+        single = len(ans.intents) == 1
         for it in list(ans.intents.values()):
-            claims = self.composer.compose_intent(s, it, ans.version)
+            claims = self.composer.compose_intent(s, it, ans.version, limit=4 if single else None)
             fresh = [c for c in claims if c.text not in seen]
             if claims and not fresh:
                 # every claim duplicates an earlier intent: it is the same need, fold it in

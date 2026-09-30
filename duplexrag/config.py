@@ -36,7 +36,8 @@ class Settings:
     first_stage_n: int = 30                 # candidates per retriever per sub-query
     rrf_k: int = 60
     rerank: bool = True
-    rerank_candidates: int = 16             # fused candidates sent to the cross-encoder
+    rerank_candidates: int = 12             # fused candidates sent to the cross-encoder
+    sentence_chunks: int = 3                # top chunks whose sentences are scored for answer selection
     evidence_per_query: int = 4
     superseded_penalty: float = 4.0         # logit penalty for documents marked superseded
 

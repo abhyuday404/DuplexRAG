@@ -48,6 +48,7 @@ SUMMARY_KEYS = [
     ("G4_fabricated_ids", "Fabricated IDs"),
     ("unanswerable_flagged_pct", "Unanswerable flagged %"),
     ("false_uncertainty_pct", "False uncertainty %"),
+    ("entity_coverage_notes_pct", "Entity coverage notes %"),
     ("G5_refinement_pass_pct", "G5 refinement %"),
     ("G6_trace_coverage_pct", "G6 trace coverage %"),
     ("ttft_ms_p50", "TTFT p50 ms"),
