@@ -51,7 +51,7 @@ class Settings:
 
     # synthesis / grounding
     synthesis: str = "extractive"           # extractive | llm
-    evidence_threshold: float = -10.0       # below this best logit an intent is "not in corpus" (conservative)
+    evidence_threshold: float = -99.0       # absolute-score "not found" disabled: unreliable for vague speech
     aspect_threshold: float = -1.0          # min logit for an entity's own section to cover an aspect
     max_sentences_per_intent: int = 3
     llm_base_url: str = "http://localhost:11434/v1"   # any OpenAI-compatible endpoint

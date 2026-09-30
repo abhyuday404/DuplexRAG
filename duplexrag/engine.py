@@ -130,6 +130,7 @@ class TurnState:
     first_retrieval_t: float | None = None
     stats_before: dict = field(default_factory=dict)
     controller_ms: float = 0.0
+    llm_usage: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -486,11 +487,21 @@ class DuplexEngine:
             ans.claims += fresh
         self._coverage(ans)
         ans.text = self.composer.render(ans)
+        self._llm_rewrite(sh, ans)
         s.answer = ans
         s.merge_ctx(self.decomposer.session_context(clauses))
         diff = {"parent_version": prev_version, "mode": "new_answer",
                 "added": [c.cid for c in ans.active_claims()], "retired": [], "retained": []}
         return self._complete(sh, "retrieval", gate, t_end, c0, jobs, finals, diff, reused)
+
+    def _llm_rewrite(self, sh: SessionHandle, ans: AnswerState) -> None:
+        """Optional LLM phrasing of the selected evidence, post-verified claim by claim."""
+        sh.turn.llm_usage = {}
+        if self.llm is None:
+            return
+        text, usage = self.llm.rewrite(ans, self.index)
+        ans.text = text
+        sh.turn.llm_usage = usage
 
     def _coverage(self, ans: AnswerState) -> None:
         intents = [i for i in ans.intents.values() if i.status == "active"]
@@ -657,6 +668,7 @@ class DuplexEngine:
         ans.uncertainty = [u for u in ans.uncertainty if u["intent_id"] not in delta_ids]
         self._coverage(ans)
         ans.text = self.composer.render(ans, delta_ids=delta_ids, constraint=constraint)
+        self._llm_rewrite(sh, ans)
         s.merge_ctx(self.decomposer.session_context(clauses))
         retained = [c.cid for c in ans.active_claims() if c.cid not in added]
         diff = {"parent_version": prev_version, "mode": "refine", "added": added, "retired": retired,
@@ -765,8 +777,12 @@ class DuplexEngine:
             "controller_ms_total": round(turn.controller_ms, 2),
             "controller_decisions": turn.decisions,
         }
-        cost = {**tokens, "cpu_ms": round(cpu_ms, 2), "usd": round(usd, 8), "llm_tokens_in": 0,
-                "llm_tokens_out": 0, "answer_words": n_tokens}
+        llm = getattr(turn, "llm_usage", {}) or {}
+        usd += (llm.get("llm_tokens_in", 0) * self.s.llm_usd_per_mtok_in +
+                llm.get("llm_tokens_out", 0) * self.s.llm_usd_per_mtok_out) / 1e6
+        cost = {**tokens, "cpu_ms": round(cpu_ms, 2), "usd": round(usd, 8),
+                "llm_tokens_in": llm.get("llm_tokens_in", 0), "llm_tokens_out": llm.get("llm_tokens_out", 0),
+                "answer_words": n_tokens}
         retrieved_any = bool(turn.dispatches) or bool(jobs)
         early = turn.first_retrieval_t is not None and turn.first_retrieval_t < t_end
         sh.tracer.emit("turn_completed", t_first, turn.turn_id, kind=kind, latency=latency, cost=cost,

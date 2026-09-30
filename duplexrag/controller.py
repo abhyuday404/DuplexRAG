@@ -34,7 +34,8 @@ PRESENTATION_RE = re.compile(
     r"shorter|shorten|brief(er|ly)?|gist|tl;?dr|bullet|bullets|bullet points|key points|main points|"
     r"summari[sz]e (that|it|this|the (last|previous|above))|sum (that|it) up|rephrase|reword|simplify|simpler|"
     r"in short|recap|one[- ]line(r)?|one sentence|short version|quick version|shorter version|the last (part|bit)|"
-    r"as a list|as a table|in plain english|condense)\b", re.I)
+    r"as a list|as a table|in plain english|condense|(go|run) (over|through) (that|it|this)( again)?|"
+    r"walk me through (that|it) again|in a (quick |short |simple )?list|step by step|numbered)\b", re.I)
 DEIXIS_RE = re.compile(r"\b(that|it|this|your (last )?answer|the (last|previous) (answer|part|bit)|the above|"
                        r"what you (just )?said)\b", re.I)
 CHITCHAT_RE = re.compile(
@@ -116,29 +117,37 @@ class RuleGate:
             new_real = [x for x in new_terms if x not in fmt_words and not x.isdigit()]
             if len(new_real) <= 1 or (spoken_count(t) and len(new_real) <= 2):
                 return GateResult("presentation", 0.9, "presentation cue referring to the previous answer", "rule")
-        if (CHITCHAT_RE.match(t) or (GRATITUDE_RE.search(t) and len(new_terms) <= 1)) and len(new_terms) <= 1 \
-                and not QUESTION_RE.search(t):
+        is_question = bool(QUESTION_RE.search(t) or "?" in t or _ASK_RE.search(t) or
+                           any(_WH_OR_AUX.search(c.text) for c in clauses if c.kind == "request"))
+        if not is_question and (CHITCHAT_RE.match(t) or (GRATITUDE_RE.search(t) and len(new_terms) <= 2
+                                                          and len(t.split()) <= 10
+                                                          and not any(x.isdigit() for x in new_terms))):
             return GateResult("chitchat", 0.9 if final else 0.6, "acknowledgement / small talk", "rule")
         if not content and not proper:
             if final:
                 return GateResult("chitchat", 0.9, "no retrievable content", "rule")
             return GateResult("undecided", 0.5, "waiting for content", "rule")
         if has_prev:
-            kinds = [c.kind for c in clauses if c.kind != "filler"]
-            only_context = bool(kinds) and all(k == "context" for k in kinds)
             head = " ".join(t.split()[:12])
             # a follow-up *question* about something new is a fresh request, not a refinement
             new_question = any(c.kind == "request" and _WH_OR_AUX.search(c.text) and
                                len([x for x in c.content + c.proper if x not in prev]) >= 2 for c in clauses)
-            if HYPOTHETICAL_RE.search(t) and not new_question:
-                return GateResult("refinement", 0.8, "hypothetical change to the current scenario", "rule")
-            if only_context:
-                return GateResult("refinement", 0.85, "late-arriving constraint (statement, no new question)", "rule")
-            if REFINE_CUE_RE.search(head) and not new_question:
+            new_words = [x for x in new_terms if not x.isdigit()]
+            if HYPOTHETICAL_RE.search(t) and len(new_words) <= 2:
+                return GateResult("refinement", 0.85, "hypothetical change to the current scenario", "rule")
+            if new_question:
+                return GateResult("retrieval", 0.9, "follow-up question about something new", "rule")
+            if not is_question:
+                # while an answer is on the table, a plain statement of fact is a late detail about it
+                # ("RSVPs just jumped, we're at fifty-two now", "the hinge snapped last week")
+                return GateResult("refinement", 0.85, "statement adding a constraint to the current answer", "rule")
+            if REFINE_CUE_RE.search(head):
                 return GateResult("refinement", 0.8, "refinement cue + constraint", "rule")
         return GateResult("retrieval", 0.8, f"{len(content) + len(proper)} salient terms", "rule")
 
 
+_ASK_RE = re.compile(r"\b(tell me|let me know|i need to know|i want to know|i'?d like to know|wondering|any idea|"
+                     r"can you|could you|do you know|need (the|to know)|looking for)\b", re.I)
 _WH_OR_AUX = re.compile(r"^(what|what's|how|which|when|where|who|can|could|do|does|is|are|should|will|would)\b|\?$",
                         re.I)
 

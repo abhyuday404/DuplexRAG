@@ -94,6 +94,9 @@ class Composer:
         """'Is there parking at the Sector 62 centre?' -> if the entity's own document never mentions
         the asked-about attribute (while the evidence *is* about that entity), say so explicitly."""
         origin = intent.query.origin
+        if not re.search(r"\?|^(is|are|do|does|can|could|will|what|which|how|where|when|who)\b|\b(is there|are there|"
+                         r"do they|does it|can they|can we|can i)\b", origin.strip(), re.I):
+            return None            # only questions ask about an attribute; statements add constraints
         # entities named in the clause itself; entities carried from context only count when the
         # clause refers back to them ("do *they* do catering?")
         named = {stem(w.lower()) for w in re.findall(r"\b[A-Z][A-Za-z0-9-]+", origin)[1:]}
@@ -112,7 +115,7 @@ class Composer:
             return None          # the best evidence is not about that entity (e.g. a general policy answers it)
         title_terms = set().union(*docs.values())
         aspect = [t for t in content_tokens(origin) if t not in title_terms and t not in GENERIC and
-                  not t.isdigit() and t not in named and (self.index.salience(t) > 0 or t in SYNONYMS)]
+                  not t.isdigit() and t not in named and (self.index.salience(t) >= 0.35 or t in SYNONYMS)]
         if not aspect:
             return None
         text = set()
@@ -340,6 +343,8 @@ class Composer:
         for asp in aspects:
             if asp.uncertain or asp is anchor:
                 continue
+            if re.search(r"(?<!^)\b[A-Z][a-z]+", asp.query.origin[1:]):
+                continue           # the aspect question names its own entity ("is the Sector 62 place big enough")
             asp_docs = {self.index.chunks[h.idx].doc_id for h in self.usable(asp.evidence)}
             covered = [d for d in entity_docs if d in asp_docs]
             if not covered:

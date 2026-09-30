@@ -4,7 +4,6 @@ version = "1.0.0"
 description = "DuplexRAG - streaming live RAG engine for full-duplex conversations (Samsung PRISM GenAI Hackathon 2026, Theme 4)"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
-license = { text = "MIT" }
 authors = [{ name = "Team Pokermons (VITV)" }]
 dependencies = [
     "numpy>=1.26,<3",
