@@ -213,7 +213,8 @@ class Composer:
         qvec = self.models.embed_queries([intent.query.text])[0]
         qtok = {t for t in content_tokens(intent.query.text) if t not in GENERIC}
         qnums = numbers_in(intent.query.text)
-        need = intent.query.constraints.get("people")
+        # a head-count only constrains *capacity* questions (not the cancellation or catering intents of the turn)
+        need = intent.query.constraints.get("people") if re.search(r"\bcapacity\b", intent.query.text, re.I) else None
         cands = []
         top = evidence[0].score
         for h in evidence:
@@ -273,10 +274,10 @@ class Composer:
                 for ci, si, sc, dd in cands:
                     if dd != d or sc < best - 0.6 or redundant(ci, si):
                         continue
-                    if need and doc_best is not None:
+                    if need:
                         vals = [float(n) for n in numbers_in(self.index.chunks[ci].sentences[si])]
-                        if vals and all(v < need for v in vals):
-                            continue          # a room too small for the group adds nothing
+                        if not vals or all(v < need for v in vals):
+                            continue          # only capacities that can host the group answer the question
                     if doc_best is not None and sc < doc_best - 0.3:
                         break
                     chosen.append((ci, si, sc))
