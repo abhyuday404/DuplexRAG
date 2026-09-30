@@ -171,19 +171,22 @@ def slide_title(s):
     }
     for k in range(4):
         mm = TEAM["members"][k] if k < len(TEAM.get("members", [])) else {}
-        val = f"{mm.get('name', '')}  {mm.get('email', '')}".strip()
+        val = ", ".join(x for x in (mm.get("name", ""), mm.get("email", "")) if x)
         lines[f"Member Name & Email {k + 1}-"] = f"Member Name & Email {k + 1}- {val}"
     for shp in s.shapes:
         if shp.has_text_frame and "Theme ID" in shp.text_frame.text:
+            shp.width = Inches(6.85)
             for p in shp.text_frame.paragraphs:
                 key = p.text.strip()
                 if key in lines and p.runs:
                     p.runs[0].text = lines[key]
                     for r in p.runs[1:]:
                         r.text = ""
-    text(s, 0.85, 6.55, 6.6, 0.5, [{"t": [("DuplexRAG", {"bold": True, "color": PURPLE}),
-                                           (" - retrieve while the user is still speaking", {"color": MUTED})],
-                                     "size": 16}])
+                for r in p.runs:
+                    r.font.size = Pt(13)
+    text(s, 0.85, 6.9, 6.6, 0.4, [{"t": [("DuplexRAG", {"bold": True, "color": PURPLE}),
+                                          (" - retrieve while the user is still speaking", {"color": MUTED})],
+                                    "size": 13}])
     _ = members
 
 

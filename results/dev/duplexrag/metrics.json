@@ -1,0 +1,107 @@
+{
+  "turns": 43,
+  "gate_accuracy_pct": 97.7,
+  "retrieval_decision_accuracy_pct": 100.0,
+  "turn_kind_confusion": {
+    "retrieval": {
+      "retrieval": 28
+    },
+    "refinement": {
+      "refinement": 8,
+      "retrieval": 1
+    },
+    "presentation": {
+      "presentation": 4
+    },
+    "chitchat": {
+      "chitchat": 2
+    }
+  },
+  "G2_early_retrieval_pct": 100.0,
+  "G2_early_before_last_chunk_pct": 89.2,
+  "G2_false_trigger_pct": 0.0,
+  "retrieval_lead_ms_median": 3402.0,
+  "G3_multi_intent_pct": 80.0,
+  "G3_compound_turns": 15,
+  "G3_mean_intent_isolation_pct": 87.8,
+  "G3_detected_2plus_pct": 86.7,
+  "retrieval_hit_at_3_pct": 96.4,
+  "retrieval_recall_at_5_pct": 96.4,
+  "gold_intents": 55,
+  "key_fact_recall_pct": 77.8,
+  "citation_precision_pct": 91.1,
+  "G4_claim_support_pct": 100.0,
+  "G4_claims": 174,
+  "G4_fabricated_ids": 0,
+  "unanswerable_flagged_pct": 33.3,
+  "false_uncertainty_pct": 0.0,
+  "entity_coverage_notes_pct": 6.5,
+  "G5_refinement_pass_pct": 88.9,
+  "G5_refinement_turns": 9,
+  "G5_detail": [
+    {
+      "turn": "dev-001/t2",
+      "versioned": true,
+      "continuity": true,
+      "delta_only": true
+    },
+    {
+      "turn": "dev-002/t2",
+      "versioned": true,
+      "continuity": true,
+      "delta_only": true
+    },
+    {
+      "turn": "dev-003/t2",
+      "versioned": true,
+      "continuity": true,
+      "delta_only": true
+    },
+    {
+      "turn": "dev-007/t2",
+      "versioned": true,
+      "continuity": true,
+      "delta_only": true
+    },
+    {
+      "turn": "dev-009/t2",
+      "versioned": true,
+      "continuity": true,
+      "delta_only": true
+    },
+    {
+      "turn": "dev-010/t2",
+      "versioned": false,
+      "continuity": false,
+      "delta_only": false
+    },
+    {
+      "turn": "dev-012/t3",
+      "versioned": true,
+      "continuity": true,
+      "delta_only": true
+    },
+    {
+      "turn": "dev-014/t2",
+      "versioned": true,
+      "continuity": true,
+      "delta_only": true
+    },
+    {
+      "turn": "dev-016/t2",
+      "versioned": true,
+      "continuity": true,
+      "delta_only": true
+    }
+  ],
+  "ttft_ms_p50": 5.9,
+  "ttft_ms_p95": 155.1,
+  "ttft_ms_mean": 61.8,
+  "post_utterance_retrieval_ms_mean": 0.0,
+  "cost_usd_per_turn_mean": 6.515e-05,
+  "cpu_ms_per_turn_mean": 1311.8,
+  "model_tokens_per_turn_mean": 5755.8,
+  "G6_trace_coverage_pct": 100.0,
+  "G6_missing": {},
+  "wall_s": 29.4
+}
