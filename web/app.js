@@ -27,7 +27,7 @@
     if (msg.type === "token") { state.answerText += msg.text; renderAnswer(true); return; }
     if (msg.type === "answer") return onAnswer(msg.turn);
     if (msg.type === "trace") return downloadTrace(msg.events);
-    if (msg.type === "replay_done") { $("btn-play").disabled = false; return; }
+    if (msg.type === "replay_done") { $("btn-play").disabled = false; window.__replayDone = true; return; }
     if (msg.type === "error") logLine({ t_stream: 0, event: "error", detail: msg.message });
   }
 
@@ -269,9 +269,9 @@
     $("scenario").innerHTML = list.map((s) => `<option value="${esc(s.session_id)}">${esc(s.title)}</option>`).join("");
   }
   $("btn-play").onclick = () => {
-    $("btn-play").disabled = true;
+    $("btn-play").disabled = true; window.__replayDone = false;
     send({ type: "replay", scenario: $("scenario").value, speed: Number($("speed").value) });
-    setTimeout(() => ($("btn-play").disabled = false), 60000);
+    setTimeout(() => ($("btn-play").disabled = false), 240000);
   };
   $("btn-new").onclick = () => send({ type: "new_session" });
   $("btn-trace").onclick = () => send({ type: "trace" });
