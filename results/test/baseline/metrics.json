@@ -1,0 +1,146 @@
+{
+  "turns": 74,
+  "gate_accuracy_pct": 63.5,
+  "retrieval_decision_accuracy_pct": 85.1,
+  "turn_kind_confusion": {
+    "retrieval": {
+      "retrieval": 47
+    },
+    "refinement": {
+      "retrieval": 16
+    },
+    "presentation": {
+      "retrieval": 7
+    },
+    "chitchat": {
+      "retrieval": 4
+    }
+  },
+  "G2_early_retrieval_pct": 0.0,
+  "G2_early_before_last_chunk_pct": 0.0,
+  "G2_false_trigger_pct": 100.0,
+  "retrieval_lead_ms_median": null,
+  "G3_multi_intent_pct": 12.5,
+  "G3_compound_turns": 24,
+  "G3_mean_intent_isolation_pct": 53.5,
+  "G3_detected_2plus_pct": 0.0,
+  "retrieval_hit_at_3_pct": 69.1,
+  "retrieval_recall_at_5_pct": 74.7,
+  "gold_intents": 81,
+  "key_fact_recall_pct": 50.9,
+  "citation_precision_pct": 44.1,
+  "G4_claim_support_pct": 100.0,
+  "G4_claims": 291,
+  "G4_fabricated_ids": 0,
+  "unanswerable_flagged_pct": 10.0,
+  "false_uncertainty_pct": 0.0,
+  "entity_coverage_notes_pct": 0.0,
+  "G5_refinement_pass_pct": 0.0,
+  "G5_refinement_turns": 16,
+  "G5_detail": [
+    {
+      "turn": "final-001/t2",
+      "versioned": false,
+      "continuity": false,
+      "delta_only": false
+    },
+    {
+      "turn": "final-002/t2",
+      "versioned": false,
+      "continuity": false,
+      "delta_only": false
+    },
+    {
+      "turn": "final-003/t2",
+      "versioned": false,
+      "continuity": false,
+      "delta_only": false
+    },
+    {
+      "turn": "final-006/t2",
+      "versioned": false,
+      "continuity": false,
+      "delta_only": false
+    },
+    {
+      "turn": "final-007/t2",
+      "versioned": false,
+      "continuity": false,
+      "delta_only": false
+    },
+    {
+      "turn": "final-009/t2",
+      "versioned": false,
+      "continuity": false,
+      "delta_only": false
+    },
+    {
+      "turn": "final-010/t2",
+      "versioned": false,
+      "continuity": false,
+      "delta_only": false
+    },
+    {
+      "turn": "final-013/t2",
+      "versioned": false,
+      "continuity": false,
+      "delta_only": false
+    },
+    {
+      "turn": "final-014/t3",
+      "versioned": false,
+      "continuity": false,
+      "delta_only": false
+    },
+    {
+      "turn": "final-016/t2",
+      "versioned": false,
+      "continuity": false,
+      "delta_only": false
+    },
+    {
+      "turn": "final-018/t2",
+      "versioned": false,
+      "continuity": false,
+      "delta_only": false
+    },
+    {
+      "turn": "final-021/t2",
+      "versioned": false,
+      "continuity": false,
+      "delta_only": false
+    },
+    {
+      "turn": "final-023/t2",
+      "versioned": false,
+      "continuity": false,
+      "delta_only": false
+    },
+    {
+      "turn": "final-026/t2",
+      "versioned": false,
+      "continuity": false,
+      "delta_only": false
+    },
+    {
+      "turn": "final-029/t2",
+      "versioned": false,
+      "continuity": false,
+      "delta_only": false
+    },
+    {
+      "turn": "final-030/t4",
+      "versioned": false,
+      "continuity": false,
+      "delta_only": false
+    }
+  ],
+  "ttft_ms_p50": 10.7,
+  "ttft_ms_p95": 17.2,
+  "ttft_ms_mean": 11.2,
+  "post_utterance_retrieval_ms_mean": 8.7,
+  "cost_usd_per_turn_mean": 5.4e-07,
+  "cpu_ms_per_turn_mean": 10.9,
+  "model_tokens_per_turn_mean": 24.8,
+  "wall_s": 0.9
+}

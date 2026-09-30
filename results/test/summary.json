@@ -1,0 +1,451 @@
+{
+  "duplexrag": {
+    "turns": 74,
+    "gate_accuracy_pct": 97.3,
+    "retrieval_decision_accuracy_pct": 98.6,
+    "turn_kind_confusion": {
+      "retrieval": {
+        "retrieval": 47
+      },
+      "refinement": {
+        "refinement": 14,
+        "retrieval": 2
+      },
+      "presentation": {
+        "presentation": 7
+      },
+      "chitchat": {
+        "chitchat": 4
+      }
+    },
+    "G2_early_retrieval_pct": 100.0,
+    "G2_early_before_last_chunk_pct": 93.7,
+    "G2_false_trigger_pct": 9.1,
+    "retrieval_lead_ms_median": 3171.0,
+    "G3_multi_intent_pct": 83.3,
+    "G3_compound_turns": 24,
+    "G3_mean_intent_isolation_pct": 89.6,
+    "G3_detected_2plus_pct": 100.0,
+    "retrieval_hit_at_3_pct": 88.9,
+    "retrieval_recall_at_5_pct": 89.7,
+    "gold_intents": 81,
+    "key_fact_recall_pct": 56.2,
+    "citation_precision_pct": 58.0,
+    "G4_claim_support_pct": 100.0,
+    "G4_claims": 332,
+    "G4_fabricated_ids": 0,
+    "unanswerable_flagged_pct": 10.0,
+    "false_uncertainty_pct": 1.9,
+    "entity_coverage_notes_pct": 0.0,
+    "G5_refinement_pass_pct": 87.5,
+    "G5_refinement_turns": 16,
+    "ttft_ms_p50": 7.0,
+    "ttft_ms_p95": 308.6,
+    "ttft_ms_mean": 59.7,
+    "post_utterance_retrieval_ms_mean": 0.0,
+    "cost_usd_per_turn_mean": 7.202e-05,
+    "cpu_ms_per_turn_mean": 1450.0,
+    "model_tokens_per_turn_mean": 5915.6,
+    "G6_trace_coverage_pct": 100.0,
+    "wall_s": 55.8
+  },
+  "baseline": {
+    "turns": 74,
+    "gate_accuracy_pct": 63.5,
+    "retrieval_decision_accuracy_pct": 85.1,
+    "turn_kind_confusion": {
+      "retrieval": {
+        "retrieval": 47
+      },
+      "refinement": {
+        "retrieval": 16
+      },
+      "presentation": {
+        "retrieval": 7
+      },
+      "chitchat": {
+        "retrieval": 4
+      }
+    },
+    "G2_early_retrieval_pct": 0.0,
+    "G2_early_before_last_chunk_pct": 0.0,
+    "G2_false_trigger_pct": 100.0,
+    "retrieval_lead_ms_median": null,
+    "G3_multi_intent_pct": 12.5,
+    "G3_compound_turns": 24,
+    "G3_mean_intent_isolation_pct": 53.5,
+    "G3_detected_2plus_pct": 0.0,
+    "retrieval_hit_at_3_pct": 69.1,
+    "retrieval_recall_at_5_pct": 74.7,
+    "gold_intents": 81,
+    "key_fact_recall_pct": 50.9,
+    "citation_precision_pct": 44.1,
+    "G4_claim_support_pct": 100.0,
+    "G4_claims": 291,
+    "G4_fabricated_ids": 0,
+    "unanswerable_flagged_pct": 10.0,
+    "false_uncertainty_pct": 0.0,
+    "entity_coverage_notes_pct": 0.0,
+    "G5_refinement_pass_pct": 0.0,
+    "G5_refinement_turns": 16,
+    "ttft_ms_p50": 10.7,
+    "ttft_ms_p95": 17.2,
+    "ttft_ms_mean": 11.2,
+    "post_utterance_retrieval_ms_mean": 8.7,
+    "cost_usd_per_turn_mean": 5.4e-07,
+    "cpu_ms_per_turn_mean": 10.9,
+    "model_tokens_per_turn_mean": 24.8,
+    "wall_s": 0.9
+  },
+  "dense_only": {
+    "turns": 74,
+    "gate_accuracy_pct": 97.3,
+    "retrieval_decision_accuracy_pct": 98.6,
+    "turn_kind_confusion": {
+      "retrieval": {
+        "retrieval": 47
+      },
+      "refinement": {
+        "refinement": 14,
+        "retrieval": 2
+      },
+      "presentation": {
+        "presentation": 7
+      },
+      "chitchat": {
+        "chitchat": 4
+      }
+    },
+    "G2_early_retrieval_pct": 100.0,
+    "G2_early_before_last_chunk_pct": 93.7,
+    "G2_false_trigger_pct": 9.1,
+    "retrieval_lead_ms_median": 3171.0,
+    "G3_multi_intent_pct": 87.5,
+    "G3_compound_turns": 24,
+    "G3_mean_intent_isolation_pct": 90.3,
+    "G3_detected_2plus_pct": 100.0,
+    "retrieval_hit_at_3_pct": 90.1,
+    "retrieval_recall_at_5_pct": 90.7,
+    "gold_intents": 81,
+    "key_fact_recall_pct": 59.8,
+    "citation_precision_pct": 60.1,
+    "G4_claim_support_pct": 100.0,
+    "G4_claims": 341,
+    "G4_fabricated_ids": 0,
+    "unanswerable_flagged_pct": 10.0,
+    "false_uncertainty_pct": 0.0,
+    "entity_coverage_notes_pct": 0.0,
+    "G5_refinement_pass_pct": 87.5,
+    "G5_refinement_turns": 16,
+    "ttft_ms_p50": 4.9,
+    "ttft_ms_p95": 90.8,
+    "ttft_ms_mean": 22.7,
+    "post_utterance_retrieval_ms_mean": 0.0,
+    "cost_usd_per_turn_mean": 5.794e-05,
+    "cpu_ms_per_turn_mean": 1166.7,
+    "model_tokens_per_turn_mean": 5895.3,
+    "G6_trace_coverage_pct": 100.0,
+    "wall_s": 44.1
+  },
+  "bm25_only": {
+    "turns": 74,
+    "gate_accuracy_pct": 97.3,
+    "retrieval_decision_accuracy_pct": 98.6,
+    "turn_kind_confusion": {
+      "retrieval": {
+        "retrieval": 47
+      },
+      "refinement": {
+        "refinement": 14,
+        "retrieval": 2
+      },
+      "presentation": {
+        "presentation": 7
+      },
+      "chitchat": {
+        "chitchat": 4
+      }
+    },
+    "G2_early_retrieval_pct": 100.0,
+    "G2_early_before_last_chunk_pct": 90.5,
+    "G2_false_trigger_pct": 9.1,
+    "retrieval_lead_ms_median": 3171.0,
+    "G3_multi_intent_pct": 66.7,
+    "G3_compound_turns": 24,
+    "G3_mean_intent_isolation_pct": 79.2,
+    "G3_detected_2plus_pct": 100.0,
+    "retrieval_hit_at_3_pct": 77.8,
+    "retrieval_recall_at_5_pct": 77.2,
+    "gold_intents": 81,
+    "key_fact_recall_pct": 53.6,
+    "citation_precision_pct": 54.4,
+    "G4_claim_support_pct": 100.0,
+    "G4_claims": 328,
+    "G4_fabricated_ids": 0,
+    "unanswerable_flagged_pct": 10.0,
+    "false_uncertainty_pct": 1.9,
+    "entity_coverage_notes_pct": 0.0,
+    "G5_refinement_pass_pct": 87.5,
+    "G5_refinement_turns": 16,
+    "ttft_ms_p50": 5.4,
+    "ttft_ms_p95": 149.3,
+    "ttft_ms_mean": 30.1,
+    "post_utterance_retrieval_ms_mean": 0.0,
+    "cost_usd_per_turn_mean": 5.715e-05,
+    "cpu_ms_per_turn_mean": 1150.8,
+    "model_tokens_per_turn_mean": 5640.6,
+    "G6_trace_coverage_pct": 100.0,
+    "wall_s": 43.5
+  },
+  "no_rerank": {
+    "turns": 74,
+    "gate_accuracy_pct": 97.3,
+    "retrieval_decision_accuracy_pct": 98.6,
+    "turn_kind_confusion": {
+      "retrieval": {
+        "retrieval": 47
+      },
+      "refinement": {
+        "refinement": 14,
+        "retrieval": 2
+      },
+      "presentation": {
+        "presentation": 7
+      },
+      "chitchat": {
+        "chitchat": 4
+      }
+    },
+    "G2_early_retrieval_pct": 100.0,
+    "G2_early_before_last_chunk_pct": 95.2,
+    "G2_false_trigger_pct": 9.1,
+    "retrieval_lead_ms_median": 3171.0,
+    "G3_multi_intent_pct": 62.5,
+    "G3_compound_turns": 24,
+    "G3_mean_intent_isolation_pct": 74.3,
+    "G3_detected_2plus_pct": 100.0,
+    "retrieval_hit_at_3_pct": 77.8,
+    "retrieval_recall_at_5_pct": 87.0,
+    "gold_intents": 81,
+    "key_fact_recall_pct": 57.1,
+    "citation_precision_pct": 35.2,
+    "G4_claim_support_pct": 100.0,
+    "G4_claims": 514,
+    "G4_fabricated_ids": 0,
+    "unanswerable_flagged_pct": 0.0,
+    "false_uncertainty_pct": 0.0,
+    "entity_coverage_notes_pct": 9.4,
+    "G5_refinement_pass_pct": 87.5,
+    "G5_refinement_turns": 16,
+    "ttft_ms_p50": 4.5,
+    "ttft_ms_p95": 147.3,
+    "ttft_ms_mean": 17.7,
+    "post_utterance_retrieval_ms_mean": 0.0,
+    "cost_usd_per_turn_mean": 1.58e-06,
+    "cpu_ms_per_turn_mean": 31.8,
+    "model_tokens_per_turn_mean": 91.6,
+    "G6_trace_coverage_pct": 100.0,
+    "wall_s": 1.7
+  },
+  "rule_controller": {
+    "turns": 74,
+    "gate_accuracy_pct": 95.9,
+    "retrieval_decision_accuracy_pct": 98.6,
+    "turn_kind_confusion": {
+      "retrieval": {
+        "retrieval": 47
+      },
+      "refinement": {
+        "refinement": 14,
+        "retrieval": 2
+      },
+      "presentation": {
+        "presentation": 6,
+        "retrieval": 1
+      },
+      "chitchat": {
+        "chitchat": 4
+      }
+    },
+    "G2_early_retrieval_pct": 100.0,
+    "G2_early_before_last_chunk_pct": 93.7,
+    "G2_false_trigger_pct": 9.1,
+    "retrieval_lead_ms_median": 3171.0,
+    "G3_multi_intent_pct": 83.3,
+    "G3_compound_turns": 24,
+    "G3_mean_intent_isolation_pct": 89.6,
+    "G3_detected_2plus_pct": 100.0,
+    "retrieval_hit_at_3_pct": 88.9,
+    "retrieval_recall_at_5_pct": 89.7,
+    "gold_intents": 81,
+    "key_fact_recall_pct": 56.2,
+    "citation_precision_pct": 58.0,
+    "G4_claim_support_pct": 100.0,
+    "G4_claims": 336,
+    "G4_fabricated_ids": 0,
+    "unanswerable_flagged_pct": 10.0,
+    "false_uncertainty_pct": 1.9,
+    "entity_coverage_notes_pct": 0.0,
+    "G5_refinement_pass_pct": 87.5,
+    "G5_refinement_turns": 16,
+    "ttft_ms_p50": 8.8,
+    "ttft_ms_p95": 312.9,
+    "ttft_ms_mean": 64.9,
+    "post_utterance_retrieval_ms_mean": 0.0,
+    "cost_usd_per_turn_mean": 7.193e-05,
+    "cpu_ms_per_turn_mean": 1448.2,
+    "model_tokens_per_turn_mean": 5928.2,
+    "G6_trace_coverage_pct": 100.0,
+    "wall_s": 54.6
+  },
+  "model_controller": {
+    "turns": 74,
+    "gate_accuracy_pct": 89.2,
+    "retrieval_decision_accuracy_pct": 98.6,
+    "turn_kind_confusion": {
+      "retrieval": {
+        "retrieval": 47
+      },
+      "refinement": {
+        "retrieval": 7,
+        "refinement": 9
+      },
+      "presentation": {
+        "presentation": 7
+      },
+      "chitchat": {
+        "chitchat": 3,
+        "retrieval": 1
+      }
+    },
+    "G2_early_retrieval_pct": 98.4,
+    "G2_early_before_last_chunk_pct": 92.1,
+    "G2_false_trigger_pct": 9.1,
+    "retrieval_lead_ms_median": 3119.0,
+    "G3_multi_intent_pct": 83.3,
+    "G3_compound_turns": 24,
+    "G3_mean_intent_isolation_pct": 89.6,
+    "G3_detected_2plus_pct": 100.0,
+    "retrieval_hit_at_3_pct": 87.7,
+    "retrieval_recall_at_5_pct": 89.1,
+    "gold_intents": 81,
+    "key_fact_recall_pct": 56.2,
+    "citation_precision_pct": 54.1,
+    "G4_claim_support_pct": 100.0,
+    "G4_claims": 327,
+    "G4_fabricated_ids": 0,
+    "unanswerable_flagged_pct": 10.0,
+    "false_uncertainty_pct": 1.9,
+    "entity_coverage_notes_pct": 0.0,
+    "G5_refinement_pass_pct": 56.2,
+    "G5_refinement_turns": 16,
+    "ttft_ms_p50": 8.9,
+    "ttft_ms_p95": 351.2,
+    "ttft_ms_mean": 67.5,
+    "post_utterance_retrieval_ms_mean": 11.4,
+    "cost_usd_per_turn_mean": 7.165e-05,
+    "cpu_ms_per_turn_mean": 1442.5,
+    "model_tokens_per_turn_mean": 6286.6,
+    "G6_trace_coverage_pct": 100.0,
+    "wall_s": 54.9
+  },
+  "no_decomposition": {
+    "turns": 74,
+    "gate_accuracy_pct": 78.4,
+    "retrieval_decision_accuracy_pct": 100.0,
+    "turn_kind_confusion": {
+      "retrieval": {
+        "retrieval": 47
+      },
+      "refinement": {
+        "retrieval": 16
+      },
+      "presentation": {
+        "presentation": 7
+      },
+      "chitchat": {
+        "chitchat": 4
+      }
+    },
+    "G2_early_retrieval_pct": 0.0,
+    "G2_early_before_last_chunk_pct": 0.0,
+    "G2_false_trigger_pct": 0.0,
+    "retrieval_lead_ms_median": null,
+    "G3_multi_intent_pct": 12.5,
+    "G3_compound_turns": 24,
+    "G3_mean_intent_isolation_pct": 53.5,
+    "G3_detected_2plus_pct": 0.0,
+    "retrieval_hit_at_3_pct": 72.8,
+    "retrieval_recall_at_5_pct": 79.0,
+    "gold_intents": 81,
+    "key_fact_recall_pct": 44.6,
+    "citation_precision_pct": 58.2,
+    "G4_claim_support_pct": 100.0,
+    "G4_claims": 201,
+    "G4_fabricated_ids": 0,
+    "unanswerable_flagged_pct": 10.0,
+    "false_uncertainty_pct": 0.0,
+    "entity_coverage_notes_pct": 0.0,
+    "G5_refinement_pass_pct": 0.0,
+    "G5_refinement_turns": 16,
+    "ttft_ms_p50": 321.2,
+    "ttft_ms_p95": 476.4,
+    "ttft_ms_mean": 346.6,
+    "post_utterance_retrieval_ms_mean": 342.8,
+    "cost_usd_per_turn_mean": 1.451e-05,
+    "cpu_ms_per_turn_mean": 292.2,
+    "model_tokens_per_turn_mean": 2520.7,
+    "G6_trace_coverage_pct": 100.0,
+    "wall_s": 22.2
+  },
+  "no_speculation": {
+    "turns": 74,
+    "gate_accuracy_pct": 97.3,
+    "retrieval_decision_accuracy_pct": 100.0,
+    "turn_kind_confusion": {
+      "retrieval": {
+        "retrieval": 47
+      },
+      "refinement": {
+        "refinement": 14,
+        "retrieval": 2
+      },
+      "presentation": {
+        "presentation": 7
+      },
+      "chitchat": {
+        "chitchat": 4
+      }
+    },
+    "G2_early_retrieval_pct": 0.0,
+    "G2_early_before_last_chunk_pct": 0.0,
+    "G2_false_trigger_pct": 0.0,
+    "retrieval_lead_ms_median": null,
+    "G3_multi_intent_pct": 87.5,
+    "G3_compound_turns": 24,
+    "G3_mean_intent_isolation_pct": 93.8,
+    "G3_detected_2plus_pct": 100.0,
+    "retrieval_hit_at_3_pct": 88.9,
+    "retrieval_recall_at_5_pct": 89.7,
+    "gold_intents": 81,
+    "key_fact_recall_pct": 58.0,
+    "citation_precision_pct": 59.0,
+    "G4_claim_support_pct": 100.0,
+    "G4_claims": 329,
+    "G4_fabricated_ids": 0,
+    "unanswerable_flagged_pct": 10.0,
+    "false_uncertainty_pct": 1.9,
+    "entity_coverage_notes_pct": 0.0,
+    "G5_refinement_pass_pct": 87.5,
+    "G5_refinement_turns": 16,
+    "ttft_ms_p50": 614.0,
+    "ttft_ms_p95": 1701.8,
+    "ttft_ms_mean": 696.4,
+    "post_utterance_retrieval_ms_mean": 691.1,
+    "cost_usd_per_turn_mean": 2.909e-05,
+    "cpu_ms_per_turn_mean": 585.7,
+    "model_tokens_per_turn_mean": 4729.0,
+    "G6_trace_coverage_pct": 100.0,
+    "wall_s": 44.2
+  }
+}
