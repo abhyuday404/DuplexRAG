@@ -45,10 +45,10 @@ current answer), `presentation` (reformat the current answer) or `chitchat`. Thr
 implementations:
 
 * *rule*: linguistic cues - presentation verbs referring back to the answer ("repeat that", "two
-  bullets", "short version") with no new content; gratitude/acknowledgement without content;
-  refinement cues ("actually", "hang on", "forgot to mention", hypotheticals such as "what if we
-  cancel ten days before") or statement-only turns that restate a constraint; a follow-up *question*
-  about something new stays a retrieval turn.
+  bullets", "short version", "go over that again") with no new content; gratitude/acknowledgement without
+  content; while an answer is on the table, a hypothetical with little new content ("what if we cancel ten
+  days before") or a plain *statement* of a new fact ("RSVPs just jumped, we're at fifty-two now") is a
+  refinement, and a follow-up *question* about something new is a retrieval turn.
 * *model*: softmax regression over the bge-small embedding plus 14 cue features (340 domain-general
   training utterances, trained in about a second, cached by content hash).
 * *hybrid* (default): high-confidence rule decisions win; the classifier arbitrates the rest.
@@ -110,10 +110,11 @@ Bengaluru-less searches. Only unmatched sub-queries are fetched after the uttera
   limits, durations), adds the entity or section heading a bare bullet needs to stand alone, and cites
   the chunk. For enumerations (several venues) one or two units per sibling document are selected; with
   a head-count, rooms too small for the group are skipped.
-* **Explicit uncertainty.** An intent is flagged instead of answered when the evidence is extremely weak,
-  when a quantity question ("how much is the fee") has no figure of the requested type in the evidence,
-  or when the named entity's own document never states an attribute that sibling entities do state
-  ("parking at the Sector 62 centre"). Across intents an **entity x aspect** check verifies each entity
+* **Explicit uncertainty.** An intent is flagged instead of answered when a quantity question ("how much
+  is the fee") has no figure of the requested type in the evidence, or when the named entity's own
+  document never states an attribute that sibling entities do state ("is there parking at the Sector 62
+  centre?"). We deliberately do not use an absolute reranker-score floor: on vague spoken requests it
+  flagged answerable questions far more often than unanswerable ones. Across intents an **entity x aspect** check verifies each entity
   surfaced by the anchor intent against every aspect intent and reports gaps ("catering options for
   Hinjewadi Tech Park Training Suites could not be verified from the corpus").
 * **Versioned session memory.** The answer state (intents, claims with citations, uncertainty) is
@@ -149,8 +150,8 @@ keeps `doc_id`, section number, titles, status (`current` / `superseded`, `super
 and every answer claim cites `Doc_ID §N`. The engine contains no corpus-specific strings: salience and
 proper-noun vocabularies are derived from the index at build time, and prompts, queries and answers are not
 embedded in code. Benchmark splits were written by independent agents that saw only the corpus: dev (18
-sessions) for tuning, dev-b (32) used once as held-out and then for diagnosis, and test (30, written after
-the engine was frozen) for the final numbers.
+sessions) for tuning; dev-b (32) and dev-c (30), each used once as a held-out set and then for diagnosis; and
+test (30, written after the final engine freeze) for the reported numbers (docs/BENCHMARK.md).
 
 ## 4. Trade-offs
 

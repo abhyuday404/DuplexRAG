@@ -194,9 +194,10 @@ answer with the same extractive composer.
 """
     if analysis.exists():
         doc += analysis.read_text()
-    metrics_doc = ROOT / "docs" / "benchmark_metrics.md"
-    if metrics_doc.exists():
-        doc += "\n" + metrics_doc.read_text()
+    for extra in ("benchmark_validity.md", "benchmark_metrics.md"):
+        path = ROOT / "docs" / extra
+        if path.exists():
+            doc += "\n" + path.read_text()
     (ROOT / "docs" / "BENCHMARK.md").write_text(doc)
     print("wrote docs/BENCHMARK.md")
     # README summary block

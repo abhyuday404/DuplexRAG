@@ -66,7 +66,7 @@ SEGMENTS = [
         "trip was international and the booking was made after travel. DuplexRAG does not restart. It keeps the "
         "standard rule and adds the foreign currency receipt check and the senior director approval for post travel "
         "bookings. The thank you is recognised as small talk, so nothing is searched."},
-    {"kind": "demo", "scenario": "demo-bengaluru-launch", "text":
+    {"kind": "demo", "scenario": "demo-bengaluru-launch", "speed": "1.5", "text":
         "Here the key entity arrives last: oh, and it's in Bengaluru. Speculative searches that did not know the city "
         "are invalidated and run again, so the answer covers Bengaluru venues, catering and event safety for a "
         "hundred and ten people. A what if about cancelling ten days before refines the answer, and give me the gist "
@@ -113,7 +113,7 @@ def start_server() -> subprocess.Popen:
     raise SystemExit("server did not start")
 
 
-async def record(scenario: str, out_dir: Path, screenshot: Path | None) -> Path:
+async def record(scenario: str, out_dir: Path, screenshot: Path | None, speed: str = "1") -> Path:
     from playwright.async_api import async_playwright
     async with async_playwright() as p:
         exe = "/usr/bin/chromium" if Path("/usr/bin/chromium").exists() else None
@@ -124,6 +124,7 @@ async def record(scenario: str, out_dir: Path, screenshot: Path | None) -> Path:
         await page.goto(f"http://127.0.0.1:{PORT}/")
         await page.wait_for_timeout(1500)
         await page.select_option("#scenario", scenario)
+        await page.select_option("#speed", speed)
         await page.wait_for_timeout(700)
         await page.click("#btn-play")
         shot_taken = screenshot is None
@@ -180,7 +181,7 @@ def main() -> None:
                 lead = 0.4
             else:
                 shot = ROOT / "docs" / "img" / "ui.png" if seg.get("screenshot") else None
-                rec = asyncio.run(record(seg["scenario"], BUILD, shot))
+                rec = asyncio.run(record(seg["scenario"], BUILD, shot, seg.get("speed", "1")))
                 vd = duration(rec)
                 dur = max(vd, nd + 1.5)
                 run(["ffmpeg", "-y", "-i", str(rec), "-i", str(wav), "-filter_complex",
@@ -208,8 +209,8 @@ def main() -> None:
     run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy", str(joined)])
     srt = Path(a.out).with_suffix(".srt")
     srt.write_text("".join(f"{i}\n{srt_time(s)} --> {srt_time(e)}\n{txt}\n\n" for i, (s, e, txt) in enumerate(subs, 1)))
-    style = ("FontName=DejaVu Sans,FontSize=15,PrimaryColour=&H00FFFFFF,BackColour=&H99000000,BorderStyle=4,"
-             "Outline=0,Shadow=0,MarginV=18")
+    style = ("FontName=DejaVu Sans,FontSize=11,PrimaryColour=&H00FFFFFF,BackColour=&H26101014,BorderStyle=4,"
+             "Outline=0,Shadow=0,MarginV=10")
     run(["ffmpeg", "-y", "-i", str(joined), "-vf", f"subtitles={srt}:force_style='{style}'", "-c:v", "libx264",
          "-preset", "medium", "-crf", "26", "-c:a", "copy", str(a.out)])
     print(f"wrote {a.out}: {duration(Path(a.out)):.1f}s, {Path(a.out).stat().st_size / 1e6:.1f} MB")

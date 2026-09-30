@@ -289,7 +289,7 @@ def slide_stack(s):
                           "CLI: index / serve / replay / ask / bench", "JSONL telemetry + JSON Schema"], AMBER),
         ("Engineering", ["Python 3.12, uv lockfile", "Docker Compose (one command)", "pytest + smoke test (G1)",
                          "git, periodic commits"], PURPLE),
-        ("Evaluation", ["discrete-event streaming replay", "4 benchmark splits, 3 written independently",
+        ("Evaluation", ["discrete-event streaming replay", "4 independently written benchmark splits",
                         "baseline + 7 ablations, gates G1-G6", "matplotlib figures, Playwright demo capture"], BLUE),
     ]
     for k, (t, lines, col) in enumerate(cards):
@@ -409,8 +409,8 @@ def slide_brownie(s):
          BLUE),
         ("Says what it doesn't know", "\"catering for Hinjewadi Tech Park could not be verified\" - entity x aspect "
                                       "coverage checks", AMBER),
-        ("Measured honestly", "discrete-event replay; held-out sets written independently after freezing; "
-                              "the earlier held-out run is reported too", GREEN),
+        ("Measured honestly", "discrete-event replay; each held-out set written independently after a freeze; "
+                              "earlier held-out runs are reported too", GREEN),
     ]
     for k, (t, d, col) in enumerate(tiles):
         x = 0.92 + (k % 3) * 3.9

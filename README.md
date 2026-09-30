@@ -132,7 +132,7 @@ duplexrag/            engine: controller.py, decompose.py, retrieve.py, index.py
 duplexrag/bench/      replay benchmark, turn-based baseline, gate metrics
 web/                  real-time demo UI (vanilla JS, WebSocket)
 data/corpus/          46-document synthetic enterprise knowledge base (see docs/corpus_spec.md)
-data/benchmark/       dev.jsonl (tuning), devb.jsonl (diagnosis), test.jsonl (final held-out)
+data/benchmark/       dev.jsonl (tuning), devb.jsonl + devc.jsonl (earlier held-out runs, then diagnosis), test.jsonl (final held-out)
 data/demo/            scripted demo sessions
 data/controller/      training utterances for the model-based turn gate (domain-general templates)
 schemas/              telemetry and output JSON schemas
@@ -146,7 +146,7 @@ tests/                unit + end-to-end tests (pytest)
 ## Limitations
 
 * The provided hackathon corpus was not available to us, so all numbers are on a synthetic 46-document
-  corpus and three independently written benchmark splits (see docs/BENCHMARK.md for how they were used).
+  corpus and four independently written benchmark splits (see docs/BENCHMARK.md for how they were used).
 * The default path is extractive: answers are exact corpus sentences, which is maximally grounded but less
   fluent than an LLM; the optional LLM mode trades a little latency and cost for fluency.
 * Unanswerable-question detection with small CPU models is conservative: we prefer answering with cited
