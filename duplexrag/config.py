@@ -36,8 +36,10 @@ class Settings:
     first_stage_n: int = 30                 # candidates per retriever per sub-query
     rrf_k: int = 60
     rerank: bool = True
-    rerank_candidates: int = 12             # fused candidates sent to the cross-encoder
+    rerank_candidates: int = 10             # fused candidates sent to the cross-encoder
+    hedge_candidates: int = 5               # of those, how many are also scored with the context-free variant
     sentence_chunks: int = 3                # top chunks whose sentences are scored for answer selection
+    sentences_per_chunk: int = 8
     evidence_per_query: int = 4
     superseded_penalty: float = 4.0         # logit penalty for documents marked superseded
 
@@ -49,7 +51,7 @@ class Settings:
 
     # synthesis / grounding
     synthesis: str = "extractive"           # extractive | llm
-    evidence_threshold: float = -6.0        # below this best logit an intent is "not in corpus" (dev-calibrated)
+    evidence_threshold: float = -10.0       # below this best logit an intent is "not in corpus" (conservative)
     aspect_threshold: float = -1.0          # min logit for an entity's own section to cover an aspect
     max_sentences_per_intent: int = 3
     llm_base_url: str = "http://localhost:11434/v1"   # any OpenAI-compatible endpoint

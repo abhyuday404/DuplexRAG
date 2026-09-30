@@ -5,6 +5,7 @@ cross-encoder call), which is how "parallel retrieval" is realised cheaply on CP
 """
 from __future__ import annotations
 
+import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -53,6 +54,7 @@ class Retriever:
         self.models = models
         self.s = settings
         self._cache: OrderedDict[tuple, list[Hit]] = OrderedDict()
+        self._cache_lock = threading.Lock()
         # superseded docs whose replacement exists in the corpus get demoted
         self._demote = np.array([
             1.0 if (c.status == "superseded" and (c.superseded_by in index.doc_ids or not c.superseded_by)) else 0.0
@@ -63,28 +65,35 @@ class Retriever:
                 self.s.retrieval_mode, self.s.rerank)
 
     def _pool(self, text: str, keywords: str, qvec, n: int, pool: dict) -> None:
+        """Add one query variant's hybrid RRF scores to the candidate pool. Variants are combined by
+        *max* (not sum) so a hedge variant cannot promote chunks that match both readings weakly."""
+        local: dict[int, dict] = {}
         if self.s.retrieval_mode in ("hybrid", "bm25"):
             for r, (i, _) in enumerate(self.index.bm25_rank(keywords or text, n)):
-                p = pool.setdefault(i, {"rrf": 0.0, "bm25_rank": None, "dense_rank": None})
+                p = local.setdefault(i, {"rrf": 0.0, "bm25_rank": None, "dense_rank": None})
                 p["rrf"] += 1.0 / (self.s.rrf_k + r + 1)
-                p["bm25_rank"] = min(r + 1, p["bm25_rank"] or 10 ** 6)
+                p["bm25_rank"] = r + 1
         if self.s.retrieval_mode in ("hybrid", "dense") and qvec is not None:
             for r, (i, _) in enumerate(self.index.dense_rank(qvec, n)):
-                p = pool.setdefault(i, {"rrf": 0.0, "bm25_rank": None, "dense_rank": None})
+                p = local.setdefault(i, {"rrf": 0.0, "bm25_rank": None, "dense_rank": None})
                 p["rrf"] += 1.0 / (self.s.rrf_k + r + 1)
-                p["dense_rank"] = min(r + 1, p["dense_rank"] or 10 ** 6)
+                p["dense_rank"] = r + 1
+        for i, p in local.items():
+            if i not in pool or p["rrf"] > pool[i]["rrf"]:
+                pool[i] = p
 
     def retrieve(self, queries: list[SubQuery]) -> tuple[dict[str, list[Hit]], dict]:
         """Returns ({qid: hits}, stats)."""
         t0 = time.perf_counter()
         out: dict[str, list[Hit]] = {}
         todo = []
-        for q in queries:
-            k = self._key(q)
-            if k in self._cache:
-                out[q.qid] = [Hit(**{**h.__dict__, "qid": q.qid}) for h in self._cache[k]]
-            else:
-                todo.append(q)
+        with self._cache_lock:
+            for q in queries:
+                k = self._key(q)
+                if k in self._cache:
+                    out[q.qid] = [Hit(**{**h.__dict__, "qid": q.qid}) for h in self._cache[k]]
+                else:
+                    todo.append(q)
         cache_hits = len(queries) - len(todo)
         n = self.s.first_stage_n
         cand: dict[str, dict[int, dict]] = {}
@@ -106,8 +115,9 @@ class Retriever:
                 top = sorted(cand[q.qid].items(), key=lambda kv: -kv[1]["rrf"])[: self.s.rerank_candidates]
                 cand[q.qid] = dict(top)
                 if self.s.rerank:
-                    for i, _ in top:
-                        for v, text in enumerate([q.text] + ([q.alt] if q.alt else [])):
+                    for rank, (i, _) in enumerate(top):
+                        variants = [q.text] + ([q.alt] if q.alt and rank < self.s.hedge_candidates else [])
+                        for v, text in enumerate(variants):
                             pairs.append((text, self.index.chunks[i].index_text()))
                             owners.append((q.qid, i, v))
             scores = self.models.rerank_pairs(pairs) if pairs else np.zeros(0)
@@ -131,7 +141,7 @@ class Retriever:
                 if self.s.rerank:
                     for h in hits[: self.s.sentence_chunks]:
                         ch = self.index.chunks[h.idx]
-                        for si, sent in enumerate(ch.sentences):
+                        for si, sent in enumerate(ch.sentences[: self.s.sentences_per_chunk]):
                             spairs.append((q.alt or q.text, f"{ch.short_title} - {ch.section_title}: {sent}"))
                             sowners.append((h, si))
             if spairs:
@@ -140,10 +150,11 @@ class Retriever:
                     if h.sent_scores is None:
                         h.sent_scores = [None] * len(self.index.chunks[h.idx].sentences)
                     h.sent_scores[si] = float(sc)
-            for q in todo:
-                self._cache[self._key(q)] = out[q.qid]
-                if len(self._cache) > 2048:
-                    self._cache.popitem(last=False)
+            with self._cache_lock:
+                for q in todo:
+                    self._cache[self._key(q)] = out[q.qid]
+                    if len(self._cache) > 2048:
+                        self._cache.popitem(last=False)
         stats = {"latency_ms": round((time.perf_counter() - t0) * 1000, 2), "queries": len(queries),
                  "cache_hits": cache_hits, "pairs_reranked": sum(len(v) for v in cand.values()) if self.s.rerank else 0}
         return out, stats

@@ -21,7 +21,7 @@ import re
 from dataclasses import dataclass, field
 
 from .retrieve import SubQuery
-from .text import COMMA_JOIN, DANGLING, STOPWORDS, WORD_NUMBERS, content_tokens, raw_tokens, stem
+from .text import COMMA_JOIN, DANGLING, STOPWORDS, WORD_NUMBERS, content_tokens, expand_terms, raw_tokens, stem
 
 FILLERS = [
     r"\bum+\b", r"\buh+\b", r"\berm+\b", r"\bhmm+\b", r"\bmm+\b", r"\byou know\b", r"\bi mean\b(?!,)",
@@ -40,8 +40,8 @@ _NUM_WORD = r"(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|tw
             r"thousand|lakh|lakhs)"
 _NUM_SEQ_RE = re.compile(rf"\b(?:a\s+)?{_NUM_WORD}(?:(?:\s+|-)(?:and\s+)?{_NUM_WORD})*\b", re.I)
 
-REPAIR_MARKERS = r"(?:no sorry|no wait|no no|sorry|i mean|or rather|scratch that|no)"
-_REPAIR_RE = re.compile(rf"(^|[,.;?!])([^,.;?!]*?)\s*,\s*{REPAIR_MARKERS}\s*,\s*", re.I)
+REPAIR_MARKERS = r"(?:(?:no sorry|no wait|no no|sorry|no|or rather|scratch that|i mean|i meant)(?:\s*,?\s*(?:i mean|i meant))?)"
+_REPAIR_RE = re.compile(rf"(^|[,.;?!])([^,.;?!]*?)\s*,\s*{REPAIR_MARKERS}\s*,?\s+", re.I)
 
 COORD = r"(?:oh and also|oh and|and also|and then|and what about|as well as|along with|and|plus)"
 _SPLIT_RE = re.compile(rf"([,;?!.]+)\s*|\s+\b({COORD})\b\s+", re.I)
@@ -91,33 +91,62 @@ bring send ask start say see hand tell know person last moved move moving change
 
 
 def _words_to_number(phrase: str) -> int | None:
+    """Cardinal number words -> int; None when the sequence is not one well-formed cardinal
+    ("eleven thirty" is a clock time / two numbers, not 41)."""
     toks = [t for t in re.split(r"[\s-]+", phrase.lower()) if t and t not in ("and", "a")]
     total, current = 0, 0
+    last = None                      # "unit" | "teen" | "tens" | "mult"
     for t in toks:
         if t in _UNITS:
+            kind = "teen" if _UNITS[t] >= 10 else "unit"
+            if last in ("unit", "teen") or (last == "tens" and kind == "teen"):
+                return None
             current += _UNITS[t]
+            last = kind
         elif t in _TENS:
+            if last in ("unit", "teen", "tens"):
+                return None
             current += _TENS[t]
+            last = "tens"
         elif t == "hundred":
             current = max(current, 1) * 100
+            last = "mult"
         elif t == "thousand":
             total += max(current, 1) * 1000
             current = 0
+            last = "mult"
         elif t in ("lakh", "lakhs"):
             total += max(current, 1) * 100000
             current = 0
+            last = "mult"
         else:
             return None
     return total + current
 
 
+_DIGIT = {"zero": "0", "oh": "0", "one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6",
+          "seven": "7", "eight": "8", "nine": "9"}
+_DIGIT_SEQ_RE = re.compile(r"\b(one|two|three|four|five|six|seven|eight|nine|zero)((?:\s+(?:oh|zero|one|two|three|"
+                           r"four|five|six|seven|eight|nine)){2,})\b", re.I)
+
+
 def _replace_numbers(text: str) -> str:
+    # digit-by-digit readings: "error eight oh nine" -> "error 809"
+    text = _DIGIT_SEQ_RE.sub(lambda m: "".join(_DIGIT[w.lower()] for w in m.group(0).split()), text)
+
     def rep(m: re.Match) -> str:
         phrase = m.group(0)
         if phrase.strip().lower() in ("one", "a", "a one"):
             return phrase
         n = _words_to_number(phrase)
-        return str(n) if n is not None else phrase
+        if n is not None:
+            return str(n)
+        # not a single cardinal ("eleven thirty"): convert word by word
+        parts = []
+        for w in re.split(r"(\s+|-)", phrase):
+            v = _words_to_number(w) if w.strip() and w.lower() not in ("a", "and", "one") else None
+            parts.append(str(v) if v is not None else w)
+        return "".join(parts)
     return _NUM_SEQ_RE.sub(rep, text)
 
 
@@ -217,7 +246,10 @@ class Decomposer:
         for tok in content_tokens(text):
             if tok in GENERIC or tok in proper:
                 continue
-            if tok.isdigit() or self.index.salience(tok) >= 0.30:
+            sal = self.index.salience(tok)
+            # informative corpus terms, numbers, and words the corpus has never seen ("food", "Uber",
+            # "resign"): unknown words still carry the user's meaning and must keep their clause alive
+            if tok.isdigit() or sal >= 0.30 or (sal == 0.0 and tok.isalpha() and len(tok) >= 3):
                 if tok not in content:
                     content.append(tok)
         return content, proper
@@ -262,8 +294,7 @@ class Decomposer:
                 kind = "qempty" if (question or has_req) and seg else "filler"
                 if kind == "qempty" and _DISTINCT_Q.search(seg) and clauses:
                     kind = "request"      # "... and how often do we have to change it?" is its own need
-            elif CONTEXT_START.search(seg) and not QUESTION_START.search(seg) and not (
-                    _WH_ANYWHERE.search(seg) and seg.rstrip().endswith("?")):
+            elif CONTEXT_START.search(seg) and not QUESTION_START.search(seg) and not _WH_ANYWHERE.search(seg):
                 kind = "context"
             elif _PREP_START.search(seg) and not _WH_ANYWHERE.search(seg) and not REQUEST_CUE.search(seg):
                 kind = "modifier" if has_prev_request else "context"
@@ -272,6 +303,9 @@ class Decomposer:
             elif has_prev_request and j in (",", "and", "plus", "as well as", "along with", "and also", "oh and",
                                             "oh and also", "and what about", ";"):
                 kind = "request"            # list item / ellipsis: "I need X, Y and Z"
+            elif not has_prev_request and re.match(r"^(the|a|an|this|that|our|my|their)\b", seg, re.I) \
+                    and len(seg.split()) <= 5 and i < len(pieces) - 1:
+                kind = "context"            # appositive noun phrase: "for the Noida centre, the Sector 62 one, ..."
             elif not has_prev_request:
                 kind = "request"
             else:
@@ -344,8 +378,8 @@ class Decomposer:
         people = next((c.people for c in clauses if c.people), None)
 
         def top(c: Clause, k: int = 3) -> list[str]:
-            ranked = sorted((t for t in c.content if not t.isdigit() and t not in c.proper),
-                            key=lambda t: -self.index.salience(t))
+            ranked = sorted((t for t in c.content if not t.isdigit() and t not in c.proper
+                             and self.index.salience(t) >= 0.30), key=lambda t: -self.index.salience(t))
             return ranked[:k]
 
         topic: list[str] = []
@@ -375,12 +409,27 @@ class Decomposer:
         out: list[SubQuery] = []
         for i, c in enumerate(requests):
             body = self.clean_request(c.text)
+            anaphoric = _is_anaphoric(body)
+            # a purely anaphoric request ("is that even allowed?", "what do I do?") is *about* the
+            # preceding context clause: fold that clause in verbatim
+            prev_ctx = None
+            for k in range(clauses.index(c) - 1, -1, -1):
+                if clauses[k].kind == "context" and (clauses[k].content or clauses[k].proper):
+                    prev_ctx = clauses[k]
+                    break
+                if clauses[k].kind == "request":
+                    break
+            if prev_ctx is not None and anaphoric and len(c.content) <= 1:
+                body = f"{self.clean_request(prev_ctx.text)} {body}"
             have = set(content_tokens(body)) | set(c.proper)
             extra: list[str] = []
-            anaphoric = _is_anaphoric(body)
-            vague = len(c.content) < 3          # few content words of its own -> needs shared context
             # 1) entities named in context clauses / the anchor clause apply to every sub-query
             extra += [p for p in ctx["proper"] if p not in have]
+            # 1b) "can they stay there?" - a place/entity deixis with no entity of its own refers back
+            #     to the session's entities even when the utterance names other places
+            if session_ctx and anaphoric and not c.proper and ctx["all_proper"] and \
+                    re.search(r"\b(there|that place|same (place|venue|trip|hotel)|they|them|it)\b", body, re.I):
+                extra += [p for p in session_ctx.get("proper", [])[:2] if p not in have]
             # 2) topic terms of this utterance's context clauses ("I'm at director level") always apply
             extra += [t for t in ctx["topic"] if t not in have]
             # session topic terms only help clauses that carry (almost) no content of their own
@@ -404,10 +453,10 @@ class Decomposer:
                            re.I):
                 facet = "capacity: "                           # "how many people can it hold" -> capacity
             text = facet + body + suffix + ("" if not extra else " " + " ".join(surf.get(t, t) for t in extra))
-            kw = " ".join(dict.fromkeys(content_tokens(text)))
-            # vague clauses ("any safety stuff") can be *hurt* by carried context: hedge with a
-            # context-free variant that keeps only entities named in the clause itself
-            alt = (facet + body + suffix).strip() if extra and len(c.content) <= 1 and not anaphoric else ""
+            kw = " ".join(dict.fromkeys(expand_terms(content_tokens(text))))
+            # carried context can also *hurt* ("what class can I fly" + "San Francisco conference"):
+            # hedge with a context-free variant; the reranker keeps the better-scoring reading
+            alt = (facet + body + suffix).strip() if extra and not (anaphoric and len(c.content) <= 1) else ""
             out.append(SubQuery(qid=f"{id_prefix}{i + 1}", text=text.strip(), keywords=kw, origin=c.text,
                                 anchor=(c is ctx["anchor"]), constraints={"people": n} if n else {}, alt=alt))
         return out
@@ -446,8 +495,8 @@ def ends_dangling(text: str) -> bool:
 
 
 def spoken_count(text: str) -> int | None:
-    m = re.search(r"\b(\d+|" + "|".join(WORD_NUMBERS) + r")\s+(bullet|bullets|points|point|lines|line|sentences|"
-                  r"sentence|items|things|parts)\b", text.lower())
+    m = re.search(r"\b(\d+|" + "|".join(WORD_NUMBERS) + r")\s+(?:\w+\s+)?(bullet|bullets|points|point|lines|line|"
+                  r"sentences|sentence|items|things|parts)\b", text.lower())
     if not m:
         return None
     v = m.group(1)

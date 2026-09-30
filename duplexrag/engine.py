@@ -18,7 +18,7 @@ import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace as dc_replace
 
 import numpy as np
 
@@ -214,6 +214,13 @@ class DuplexEngine:
     def _classify(self, sh: SessionHandle, text: str, final: bool) -> GateResult:
         return self.gate.classify(text, sh.session.has_answer, final, self._prev_topic(sh.session))
 
+    def _new_terms(self, sh: SessionHandle, text: str, digits: bool = False) -> list[str]:
+        """Salient terms of a follow-up that the current answer does not already cover (numbers only
+        count for refinements: "fifty people, not thirty")."""
+        prev = self._prev_topic(sh.session)
+        content, proper = self.decomposer.salient_terms(normalize_spoken(text))
+        return [t for t in dict.fromkeys(content + proper) if t not in prev and (digits or not t.isdigit())]
+
     def _key(self, q: SubQuery) -> str:
         return " ".join(sorted(set(content_tokens(q.text))))
 
@@ -274,6 +281,13 @@ class DuplexEngine:
                 action = "suppress"
             elif not self.speculative and gate.label in ("retrieval", "refinement"):
                 reason = "speculative retrieval disabled (ablation): waiting for utterance end"
+            elif (sh.session.has_answer and gate.label in ("retrieval", "refinement")
+                  and (len(normalize_spoken(turn.text).split()) < 5 or
+                       len(self._new_terms(sh, turn.text, digits=gate.label == "refinement"))
+                       < (1 if gate.label == "refinement" else 2))):
+                # follow-up turns start with short acknowledgements / format requests: do not
+                # speculate on the first few words (keeps false triggers low)
+                reason = "follow-up turn: waiting for 5+ words and 2+ new terms before speculating"
             elif gate.label == "retrieval" and self.decompose_enabled:
                 clauses = self.decomposer.segment(turn.text, final=False)
                 cands = self.decomposer.subqueries(clauses, sh.session.ctx, include_incomplete=False,
@@ -281,13 +295,18 @@ class DuplexEngine:
                 trigger = "multi_intent" if len([c for c in clauses if c.kind == "request"]) > 1 else "provisional"
                 # an in-progress clause may fire a provisional search once it is semantically stable
                 tail = clauses[-1] if clauses else None
+                n_words = len(normalize_spoken(turn.text).split())
                 if tail is not None and not tail.complete and tail.kind in ("request", "context") and \
-                        not ends_dangling(tail.text) and (len(tail.content) + 2 * len(tail.proper) >= 4):
+                        not ends_dangling(tail.text) and n_words >= 5 and \
+                        (len(tail.content) + 2 * len(tail.proper) >= 3):
                     prov = self.decomposer.subqueries(clauses, sh.session.ctx, include_incomplete=True,
                                                       id_prefix=f"{turn.turn_id}p{len(turn.dispatches)}_")
                     prov = [q for q in prov if q.origin == tail.text or tail.text in q.origin]
                     sig = frozenset(tail.content + tail.proper)
-                    if prov and not any(len(sig - k) < 2 for k in turn.provisional_keys):
+                    hard = frozenset(tail.proper) | {t for t in tail.content if t.isdigit()}
+                    # re-fire only when the clause gained 2+ terms or a new entity / number
+                    # ("Banyan" -> "Banyan Court"), never on every token
+                    if prov and not any(len(sig - k) < 2 and hard <= k for k in turn.provisional_keys):
                         turn.provisional_keys.add(sig)
                         cands += prov
                         trigger = "provisional" if not turn.dispatches else trigger
@@ -301,6 +320,13 @@ class DuplexEngine:
             elif gate.label == "refinement" and sh.session.has_answer and self.decompose_enabled:
                 # speculative *delta* retrieval: fire as soon as a constraint clause is complete
                 deltas, _ = self._refinement_deltas(sh, turn.text, final=False)
+                if not deltas:
+                    # the constraint may be the (not yet punctuated) tail clause: treat it as complete
+                    # once it is stable, instead of waiting for the end-of-utterance silence
+                    cl = self.decomposer.segment(turn.text, final=False)
+                    tail = cl[-1] if cl else None
+                    if tail is not None and not ends_dangling(tail.text) and len(tail.content) + len(tail.proper) >= 2:
+                        deltas, _ = self._refinement_deltas(sh, turn.text, final=True)
                 new = self._new_queries(sh, [q for _, _, q in deltas])
                 if new:
                     action, dispatched = "retrieve", new
@@ -490,6 +516,31 @@ class DuplexEngine:
         ans = s.answer
         clauses = [c for c in self.decomposer.segment(text, final=final) if c.kind != "filler"]
         usable = [c for c in clauses if c.complete and (c.content or c.proper or c.people)]
+        # low-content fragments ("full disclosure", "I kept putting this off") are not separate needs:
+        # fold them into the nearest substantive constraint clause
+        def substantive(c) -> bool:
+            return bool(c.people or c.proper or
+                        len([t for t in c.content if self.index.salience(t) >= 0.30]) >= 2)
+        if len(usable) > 1:
+            subs = [c for c in usable if substantive(c)]
+            if not subs:
+                subs = [usable[-1]]
+            merged_usable = []
+            for c in usable:
+                if c in subs:
+                    merged_usable.append(dc_replace(c, content=list(c.content), proper=list(c.proper)))
+                else:
+                    tgt = merged_usable[-1] if merged_usable else None
+                    if tgt is None:           # fold into the next substantive clause
+                        nxt = subs[0]
+                        idx = usable.index(nxt)
+                        usable[idx] = dc_replace(nxt, text=f"{c.text} {nxt.text}",
+                                              content=list(dict.fromkeys(c.content + nxt.content)))
+                        subs[0] = usable[idx]
+                    else:
+                        tgt.text = f"{tgt.text} {c.text}"
+                        tgt.content = list(dict.fromkeys(tgt.content + c.content))
+            usable = merged_usable or usable
         anchor_terms = list(dict.fromkeys(list(s.ctx.get("proper", []))[:3] + list(s.ctx.get("topic", []))[:3]))
         active = [i for i in ans.intents.values() if i.status == "active"]
         ivecs = self.models.embed_queries([i.query.text for i in active]) if active else np.zeros((0, 384))
@@ -616,6 +667,8 @@ class DuplexEngine:
     # .................................................................. presentation / chit-chat
     def _finish_suppressed(self, sh: SessionHandle, gate: GateResult, t_end: float, c0: float) -> TurnResult:
         turn, s = sh.turn, sh.session
+        if turn.dispatches:              # speculative work that turned out unnecessary is still traced
+            self._emit_retrieval_done(sh, [], {}, [])
         sh.tracer.emit("retrieval_suppressed", t_end, turn.turn_id, reason=gate.label, detail=gate.reason)
         diff = None
         if gate.label == "presentation" and s.has_answer:

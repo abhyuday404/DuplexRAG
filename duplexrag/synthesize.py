@@ -24,7 +24,7 @@ import numpy as np
 from .decompose import GENERIC
 from .retrieve import Hit
 from .session import AnswerState, Claim, Intent, Session
-from .text import STOPWORDS, content_tokens, numbers_in, raw_tokens, stem
+from .text import STOPWORDS, SYNONYMS, content_tokens, numbers_in, raw_tokens, stem
 
 _XREF_RE = re.compile(r"\b(see|is in|are in|set out in|described in|listed in|per|under|follow(s)?)\s+(the\s+)?"
                       r"([A-Z][\w ]+\()?Doc_\d+", re.I)
@@ -49,7 +49,7 @@ def _sigmoid(x: float) -> float:
 
 def _mentions(term: str, tokens: set[str]) -> bool:
     """Stem match, tolerant to derivations ("cancel" ~ "cancellation", "reimburse" ~ "reimbursement")."""
-    if term in tokens:
+    if term in tokens or any(s in tokens for s in SYNONYMS.get(term, [])):
         return True
     if len(term) < 5:
         return False
@@ -94,9 +94,12 @@ class Composer:
         """'Is there parking at the Sector 62 centre?' -> if the entity's own document never mentions
         the asked-about attribute (while the evidence *is* about that entity), say so explicitly."""
         origin = intent.query.origin
-        # entities: capitalised words anywhere in the query (includes entities carried from context)
-        named = {stem(w.lower()) for w in re.findall(r"(?<![.?!]\s)(?<!^)\b[A-Z][A-Za-z0-9-]+", intent.query.text)}
-        named |= {stem(w.lower()) for w in re.findall(r"\b[A-Z][A-Za-z0-9-]+", origin)[1:]}
+        # entities named in the clause itself; entities carried from context only count when the
+        # clause refers back to them ("do *they* do catering?")
+        named = {stem(w.lower()) for w in re.findall(r"\b[A-Z][A-Za-z0-9-]+", origin)[1:]}
+        if re.search(r"\b(they|them|their|it|its|there|that place|the venue|the centre|the hotel)\b", origin, re.I):
+            named |= {stem(w.lower()) for w in re.findall(r"(?<![.?!]\s)(?<!^)\b[A-Z][A-Za-z0-9-]+",
+                                                           intent.query.text)}
         named -= {"i"}
         docs: dict[str, set[str]] = {}
         for c in self.index.chunks:
@@ -105,19 +108,29 @@ class Composer:
                 docs.setdefault(c.doc_id, title)
         if not docs or len(docs) > 2:
             return None
-        ev_docs = {self.index.chunks[h.idx].doc_id for h in intent.evidence[:3]}
-        if not (ev_docs & set(docs)):
-            return None
+        if not intent.evidence or self.index.chunks[intent.evidence[0].idx].doc_id not in docs:
+            return None          # the best evidence is not about that entity (e.g. a general policy answers it)
         title_terms = set().union(*docs.values())
         aspect = [t for t in content_tokens(origin) if t not in title_terms and t not in GENERIC and
-                  not t.isdigit() and t not in named and self.index.salience(t) > 0]
+                  not t.isdigit() and t not in named and (self.index.salience(t) > 0 or t in SYNONYMS)]
         if not aspect:
             return None
         text = set()
+        cats = set()
         for c in self.index.chunks:
             if c.doc_id in docs:
                 text |= set(content_tokens(c.index_text()))
+                cats.add(c.category)
         if any(_mentions(t, text) for t in aspect):
+            return None
+        # only an attribute that *sibling* entities of the same kind do state can be missing
+        # ("parking" is stated for other venues; "watch out for" is not an attribute at all)
+        sib = set()
+        for c in self.index.chunks:
+            if c.category in cats and c.doc_id not in docs:
+                sib |= set(content_tokens(c.index_text()))
+        aspect = [t for t in aspect if _mentions(t, sib)]
+        if not aspect:
             return None
         name = next(c.short_title for c in self.index.chunks if c.doc_id in docs)
         return f"{name} does not mention {' / '.join(aspect[:2])}"
@@ -130,7 +143,7 @@ class Composer:
             return None
         named = {stem(w.lower()) for w in re.findall(r"\b[A-Z][A-Za-z0-9-]+", intent.query.origin)}
         aspect = [t for t in content_tokens(intent.query.origin) if t not in GENERIC and not t.isdigit()
-                  and t not in named and self.index.salience(t) > 0]
+                  and t not in named and (self.index.salience(t) > 0 or t in SYNONYMS)]
         if len(aspect) < 2:          # a single word is too weak a signal (paraphrase is common)
             return None
         for h in hits:
@@ -145,7 +158,7 @@ class Composer:
         best = hits[0].score if hits else -99.0
         if best < self.s.evidence_threshold:
             return "no sufficiently relevant evidence in the corpus"
-        gap = self.entity_attribute_gap(intent) or self.aspect_unaddressed(intent)
+        gap = self.entity_attribute_gap(intent)
         if gap:
             return gap
         kind = self.expected_answer_type(intent.query.origin)

@@ -30,10 +30,11 @@ from .text import content_tokens
 LABELS = ("retrieval", "refinement", "presentation", "chitchat")
 
 PRESENTATION_RE = re.compile(
-    r"\b(repeat|again|say that|shorter|shorten|brief(er|ly)?|gist|tl;?dr|bullet|bullets|bullet points|points|"
-    r"summari[sz]e (that|it|this|the (last|previous|above))|rephrase|reword|simplify|simpler|in short|recap|one line|"
-    r"one sentence|the last part|as a list|as a table|in plain english|condense|sum (that|it) up|quick version)\b",
-    re.I)
+    r"\b(repeat|say (that|it) again|read (that|it) back|come again|(i )?missed (that|the last)|didn'?t catch|"
+    r"shorter|shorten|brief(er|ly)?|gist|tl;?dr|bullet|bullets|bullet points|key points|main points|"
+    r"summari[sz]e (that|it|this|the (last|previous|above))|sum (that|it) up|rephrase|reword|simplify|simpler|"
+    r"in short|recap|one[- ]line(r)?|one sentence|short version|quick version|shorter version|the last (part|bit)|"
+    r"as a list|as a table|in plain english|condense)\b", re.I)
 DEIXIS_RE = re.compile(r"\b(that|it|this|your (last )?answer|the (last|previous) (answer|part|bit)|the above|"
                        r"what you (just )?said)\b", re.I)
 CHITCHAT_RE = re.compile(
@@ -43,12 +44,16 @@ CHITCHAT_RE = re.compile(
     r"that'?s everything|brilliant|makes sense|sure|yes|yeah|no|nope|appreciate it|much appreciated|"
     r"that helps|helpful|wonderful|fantastic|excellent|good|fine|so|um|uh|well|for that|really|so much)"
     r"[\s,.!]*)+$", re.I)
+GRATITUDE_RE = re.compile(r"\b(thanks|thank you|cheers|appreciate (it|that|the help)|much appreciated|that'?s all|"
+                          r"that helps|got it|perfect|brilliant)\b", re.I)
 REFINE_CUE_RE = re.compile(
-    r"^\W*(oh[,\s]+)?(wait|actually|hmm|also|oh|by the way|btw|one (more )?thing|i forgot|i should (mention|say)|"
-    r"forgot to (say|mention)|realistically|what if|and if|but|instead|make (it|that)|change (it|that)|scratch that|"
-    r"correction|turns out|update)\b", re.I)
+    r"\b(wait|actually|hang on|hold on|by the way|btw|one (more )?thing|forgot|should'?ve (said|mentioned)|"
+    r"should have (said|mentioned)|i should (mention|say|add)|full disclosure|to be clear|realistically|what if|"
+    r"and if|instead|make (it|that)|change (it|that)|scratch that|correction|turns out|update|just (heard|found out|"
+    r"checked|looked|realised|realized|noticed)|looked at the \w+ again|i guess|now that)\b", re.I)
 HYPOTHETICAL_RE = re.compile(r"\b(what if|and if|does (that|it) change|would (that|it) change|does that affect|"
-                             r"what happens if|in that case|if we|if i)\b", re.I)
+                             r"what happens if|in that case|if we|if i|is that (gonna|going to) be a problem|"
+                             r"does that matter|is that ok(ay)?|still (apply|allowed|ok))\b", re.I)
 STATEMENT_START_RE = re.compile(r"^\W*((oh|wait|actually|and|so|hmm|also|but|by the way|one thing)[,\s]+)*"
                                 r"(it's|it is|it'll|it was|we're|we are|we'll|i'm|i am|i'd|i got|i've|i was|the \w+ "
                                 r"(is|was|are|were|got|has|had|includes?)|they're|there('s| will be| are)|make it|"
@@ -102,26 +107,40 @@ class RuleGate:
         clauses = self.d.segment(text, final=final)
         content = [x for c in clauses for x in c.content]
         proper = [x for c in clauses for x in c.proper]
+        prev = prev_topic or set()
+        new_terms = [x for x in dict.fromkeys(content + proper) if x not in prev]
         if has_prev and PRESENTATION_RE.search(t):
-            new_terms = [x for x in content if x not in (prev_topic or set())
-                         and not PRESENTATION_RE.search(x) and x not in ("bullet", "point", "short")]
-            if DEIXIS_RE.search(t) or spoken_count(t) or len(new_terms) <= 1:
+            fmt_words = {"bullet", "point", "short", "version", "line", "sentence", "list", "tabl", "part", "bit",
+                         "miss", "catch", "last", "key", "main", "put", "give", "make", "turn", "format", "send",
+                         "write", "read", "quick", "simple", "plain", "english", "form"}
+            new_real = [x for x in new_terms if x not in fmt_words and not x.isdigit()]
+            if len(new_real) <= 1 or (spoken_count(t) and len(new_real) <= 2):
                 return GateResult("presentation", 0.9, "presentation cue referring to the previous answer", "rule")
-        if not content and not proper and (CHITCHAT_RE.match(t) or final):
-            return GateResult("chitchat", 0.9 if final else 0.6, "no retrievable content", "rule")
+        if (CHITCHAT_RE.match(t) or (GRATITUDE_RE.search(t) and len(new_terms) <= 1)) and len(new_terms) <= 1 \
+                and not QUESTION_RE.search(t):
+            return GateResult("chitchat", 0.9 if final else 0.6, "acknowledgement / small talk", "rule")
         if not content and not proper:
+            if final:
+                return GateResult("chitchat", 0.9, "no retrievable content", "rule")
             return GateResult("undecided", 0.5, "waiting for content", "rule")
         if has_prev:
             kinds = [c.kind for c in clauses if c.kind != "filler"]
             only_context = bool(kinds) and all(k == "context" for k in kinds)
-            overlap = len(set(content) & (prev_topic or set())) / max(1, len(set(content)))
-            if HYPOTHETICAL_RE.search(t) and (overlap >= 0.3 or len(set(content)) <= 3) and not proper:
+            head = " ".join(t.split()[:12])
+            # a follow-up *question* about something new is a fresh request, not a refinement
+            new_question = any(c.kind == "request" and _WH_OR_AUX.search(c.text) and
+                               len([x for x in c.content + c.proper if x not in prev]) >= 2 for c in clauses)
+            if HYPOTHETICAL_RE.search(t) and not new_question:
                 return GateResult("refinement", 0.8, "hypothetical change to the current scenario", "rule")
             if only_context:
                 return GateResult("refinement", 0.85, "late-arriving constraint (statement, no new question)", "rule")
-            if REFINE_CUE_RE.search(text) and STATEMENT_START_RE.search(t):
-                return GateResult("refinement", 0.75, "refinement cue + constraint statement", "rule")
+            if REFINE_CUE_RE.search(head) and not new_question:
+                return GateResult("refinement", 0.8, "refinement cue + constraint", "rule")
         return GateResult("retrieval", 0.8, f"{len(content) + len(proper)} salient terms", "rule")
+
+
+_WH_OR_AUX = re.compile(r"^(what|what's|how|which|when|where|who|can|could|do|does|is|are|should|will|would)\b|\?$",
+                        re.I)
 
 
 class ModelGate:

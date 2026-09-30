@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DuplexRAG - Streaming Live RAG</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="logo" aria-hidden="true"><span></span><span></span></div>
+    <div>
+      <h1>DuplexRAG</h1>
+      <p>Streaming live RAG · retrieve while the user is still speaking</p>
+    </div>
+  </div>
+  <div class="session">
+    <span class="pill" id="session-pill">connecting…</span>
+    <span class="chips" id="config-chips"></span>
+    <button class="btn ghost" id="btn-trace" title="Download the JSONL telemetry trace of this session">Trace ⤓</button>
+    <button class="btn ghost" id="btn-new">New session</button>
+    <button class="btn ghost icon" id="btn-theme" title="Toggle theme">◐</button>
+  </div>
+</header>
+
+<main class="grid">
+  <!-- ============================== conversation -->
+  <section class="panel" id="panel-convo">
+    <div class="panel-head">
+      <h2>Conversation</h2>
+      <span class="muted small">incremental transcript chunks · controller decisions</span>
+    </div>
+    <div class="controls">
+      <div class="row">
+        <select id="scenario" aria-label="Demo scenario"></select>
+        <select id="speed" aria-label="Replay speed">
+          <option value="1">1×</option><option value="1.5">1.5×</option><option value="2">2×</option>
+        </select>
+        <button class="btn primary" id="btn-play">▶ Replay</button>
+      </div>
+      <div class="row">
+        <input id="typed" type="text" placeholder="Type an utterance; it is streamed word by word…" autocomplete="off">
+        <button class="btn" id="btn-send">Stream</button>
+        <button class="btn mic" id="btn-mic" title="Speak (Chrome Web Speech API)">🎙</button>
+      </div>
+    </div>
+    <div class="transcript" id="transcript"></div>
+  </section>
+
+  <!-- ============================== answer -->
+  <section class="panel" id="panel-answer">
+    <div class="panel-head">
+      <h2>Grounded answer</h2>
+      <span class="badges" id="answer-badges"></span>
+    </div>
+    <div class="answer" id="answer"><p class="placeholder">Start a replay, type, or speak. Retrieval begins before
+      you finish; the answer streams with a citation for every claim.</p></div>
+    <div class="diffbar" id="diffbar"></div>
+    <div class="source" id="source" hidden>
+      <div class="source-head"><strong id="source-label"></strong><span id="source-title" class="muted"></span>
+        <button class="btn ghost small" id="source-close">✕</button></div>
+      <div class="source-body" id="source-body"></div>
+    </div>
+  </section>
+
+  <!-- ============================== pipeline -->
+  <section class="panel" id="panel-pipe">
+    <div class="panel-head">
+      <h2>Live pipeline</h2>
+      <span class="muted small">telemetry, per turn</span>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><span class="k" id="kpi-ttft">–</span><span class="l">time to first token</span></div>
+      <div class="kpi"><span class="k" id="kpi-lead">–</span><span class="l">retrieval started before end of speech</span></div>
+      <div class="kpi"><span class="k" id="kpi-queries">–</span><span class="l">sub-queries (reused)</span></div>
+      <div class="kpi"><span class="k" id="kpi-ground">–</span><span class="l">claims grounded</span></div>
+      <div class="kpi"><span class="k" id="kpi-cost">–</span><span class="l">cost this turn (CPU)</span></div>
+      <div class="kpi"><span class="k" id="kpi-version">–</span><span class="l">answer version</span></div>
+    </div>
+    <h3>Sub-queries</h3>
+    <div class="queries" id="queries"></div>
+    <h3>Event stream</h3>
+    <div class="events" id="events"></div>
+  </section>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -127,6 +127,30 @@ def split_sentences(text: str) -> list[str]:
     return [normalize_space(u) for u in units if len(u.split()) >= 3]
 
 
+# Small, domain-agnostic spoken-to-written synonym table (general workplace English, not corpus facts).
+# Used only to expand BM25 keywords and lexical checks; dense retrieval handles the rest.
+_SYN = {
+    "food": "cater meal", "meal": "cater", "lunch": "meal cater", "snack": "cater", "drink": "cater",
+    "uber": "cab taxi", "ola": "cab taxi", "taxi": "cab", "lyft": "cab taxi",
+    "wifi": "internet", "internet": "wifi",
+    "resign": "notice resignation", "quit": "notice resignation",
+    "vacation": "leave", "holiday": "leave", "pto": "leave", "sick": "leave",
+    "boss": "manager", "salary": "pay", "refund": "reimburs", "money": "reimburs",
+    "computer": "laptop", "mobile": "phone", "cellphone": "phone", "kid": "child", "baby": "child",
+    "stay": "hotel accommodation", "room": "hotel accommodation",
+}
+SYNONYMS = {stem(k): [stem(x) for x in v.split()] for k, v in _SYN.items()}
+
+
+def expand_terms(tokens: list[str]) -> list[str]:
+    out = list(tokens)
+    for t in tokens:
+        for s in SYNONYMS.get(t, []):
+            if s not in out:
+                out.append(s)
+    return out
+
+
 WORD_NUMBERS = {
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
     "single": 1, "couple": 2, "pair": 2,
